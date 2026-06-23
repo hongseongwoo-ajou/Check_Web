@@ -1,0 +1,151 @@
+header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+header h1 {
+    font-size: 1.4rem;
+    color: var(--color-primary);
+}
+
+.back-link {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.back-link:hover {
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
+
+.auth-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+.tab-group {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.8rem;
+    border-bottom: 2px solid var(--color-border);
+}
+
+.tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    padding: 0.6rem 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    font-weight: 700;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+.auth-form.hidden {
+    display: none;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.field label {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.field input {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-size: 1rem;
+    padding: 0.65rem 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.field input:focus {
+    border-color: var(--color-primary);
+}
+
+.btn-submit {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--color-primary);
+    color: #1a1a2e;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 0.4rem;
+}
+
+.btn-submit:hover {
+    background: var(--color-primary-dark);
+}
+
+.error-msg {
+    color: #f44336;
+    font-size: 0.85rem;
+    min-height: 1.2em;
+}
+
+.success-msg {
+    color: #4caf50;
+    font-size: 0.85rem;
+    min-height: 1.2em;
+}
+
+@media (max-width: 480px) {
+    header {
+        padding: 1rem;
+    }
+
+    .auth-card {
+        padding: 1.5rem 1.25rem;
+        border-radius: var(--radius);
+    }
+
+    .btn-submit {
+        padding: 0.85rem;
+        font-size: 1rem;
+    }
+
+    .field input {
+        padding: 0.75rem 0.9rem;
+    }
+}

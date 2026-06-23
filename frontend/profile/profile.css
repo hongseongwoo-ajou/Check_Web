@@ -1,0 +1,281 @@
+/* ===== 헤더 ===== */
+.profile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.header-logo {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    letter-spacing: 0.03em;
+}
+
+.btn-back {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+    padding: 0.4rem 0;
+}
+
+.btn-back:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.btn-logout {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.btn-logout:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+}
+
+/* ===== 메인 ===== */
+.profile-main {
+    max-width: 620px;
+    margin: 2.5rem auto;
+    padding: 0 1.5rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 0.25rem;
+}
+
+/* ===== 프로필 카드 ===== */
+.profile-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.card-heading {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ===== 폼 필드 ===== */
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.field-label {
+    font-size: 0.83rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+.field-input {
+    padding: 0.65rem 0.9rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-size: 0.95rem;
+    font-family: var(--font-main);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.field-input:focus {
+    border-color: var(--color-primary);
+}
+
+.field-readonly {
+    padding: 0.65rem 0.9rem;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    font-family: 'Courier New', monospace;
+}
+
+/* ===== Chess 레이팅 표시 ===== */
+.chess-rating-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.rating-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.9rem 1rem;
+}
+
+.rating-divider {
+    width: 1px;
+    height: 3rem;
+    background: var(--color-border);
+    flex-shrink: 0;
+}
+
+.rating-label {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.rating-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    font-family: 'Courier New', monospace;
+}
+
+.rating-value.muted {
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.rating-value.small {
+    font-size: 0.85rem;
+    font-weight: 400;
+    font-family: var(--font-main);
+}
+
+/* ===== 카드 하단 (버튼 + 메시지) ===== */
+.card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.status-msg {
+    font-size: 0.83rem;
+    color: var(--color-text-muted);
+    flex: 1;
+    min-height: 1.2em;
+    margin: 0;
+}
+
+.status-msg.success { color: #6fcf97; }
+.status-msg.error   { color: #e07070; }
+
+.btn-row {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.btn-save {
+    padding: 0.55rem 1.3rem;
+    background-color: var(--color-primary);
+    color: #1a1a2e;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.btn-save:hover    { opacity: 0.88; }
+.btn-save:disabled { opacity: 0.5; cursor: default; }
+
+.btn-outline {
+    padding: 0.55rem 1.1rem;
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-outline:hover    { background: var(--color-primary); color: #1a1a2e; }
+.btn-outline:disabled { opacity: 0.5; cursor: default; }
+
+/* ===== 반응형 ===== */
+@media (max-width: 540px) {
+    .profile-main {
+        margin: 1.5rem auto;
+        padding: 0 1rem 3rem;
+    }
+
+    .profile-card {
+        padding: 1.25rem;
+    }
+}
+
+@media (max-width: 500px) {
+    .profile-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .header-logo {
+        display: none;
+    }
+
+    .chess-rating-row {
+        flex-direction: column;
+    }
+
+    .rating-divider {
+        width: 100%;
+        height: 1px;
+    }
+
+    .card-footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .btn-row {
+        width: 100%;
+    }
+
+    .btn-save,
+    .btn-outline {
+        flex: 1;
+        min-height: 44px;
+        font-size: 0.95rem;
+    }
+
+    .field-input {
+        min-height: 44px;
+    }
+}

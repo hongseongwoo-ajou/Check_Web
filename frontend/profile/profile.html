@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 정보 - 체스 동아리</title>
+    <link rel="stylesheet" href="../css/global.css">
+    <link rel="stylesheet" href="profile.css">
+</head>
+
+<body>
+
+    <header class="profile-header">
+        <a href="../lobby/lobby.html" class="btn-back">&#8592; 로비로 돌아가기</a>
+        <div class="header-logo">♟ Chess Club</div>
+        <button id="btn-logout" class="btn-logout">로그아웃</button>
+    </header>
+
+    <main class="profile-main">
+        <h1 class="page-title">내 정보</h1>
+
+        <!-- 기본 정보 -->
+        <section class="profile-card">
+            <h2 class="card-heading">기본 정보</h2>
+            <div class="field-group">
+                <label class="field-label">아이디</label>
+                <span id="display-username" class="field-readonly">-</span>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="input-nickname">닉네임</label>
+                <input type="text" id="input-nickname" class="field-input" maxlength="20" placeholder="닉네임 입력">
+            </div>
+            <div class="card-footer">
+                <p id="profile-msg" class="status-msg"></p>
+                <button id="btn-save-profile" class="btn-save">저장</button>
+            </div>
+        </section>
+
+        <!-- Chess.com 연동 -->
+        <section class="profile-card">
+            <h2 class="card-heading">Chess.com 연동</h2>
+            <div class="chess-rating-row" id="chess-rating-row">
+                <div class="rating-item" id="blitz-display">
+                    <span class="rating-label">블리츠</span>
+                    <span class="rating-value" id="display-blitz">-</span>
+                </div>
+                <div class="rating-divider"></div>
+                <div class="rating-item" id="rapid-display">
+                    <span class="rating-label">래피드</span>
+                    <span class="rating-value" id="display-rapid">-</span>
+                </div>
+                <div class="rating-divider"></div>
+                <div class="rating-item">
+                    <span class="rating-label">마지막 갱신</span>
+                    <span class="rating-value" id="display-updated">-</span>
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="input-chess-username">Chess.com 아이디</label>
+                <input type="text" id="input-chess-username" class="field-input"
+                       placeholder="Chess.com 아이디 입력" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="card-footer">
+                <p id="chess-msg" class="status-msg"></p>
+                <div class="btn-row">
+                    <button id="btn-refresh-chess" class="btn-outline">레이팅 새로고침</button>
+                    <button id="btn-save-chess" class="btn-save">저장 및 조회</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 비밀번호 변경 -->
+        <section class="profile-card">
+            <h2 class="card-heading">비밀번호 변경</h2>
+            <div class="field-group">
+                <label class="field-label" for="input-current-pw">현재 비밀번호</label>
+                <input type="password" id="input-current-pw" class="field-input" placeholder="현재 비밀번호 입력">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="input-new-pw">새 비밀번호</label>
+                <input type="password" id="input-new-pw" class="field-input" placeholder="새 비밀번호 (4자 이상)">
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="input-confirm-pw">새 비밀번호 확인</label>
+                <input type="password" id="input-confirm-pw" class="field-input" placeholder="새 비밀번호 다시 입력">
+            </div>
+            <div class="card-footer">
+                <p id="password-msg" class="status-msg"></p>
+                <button id="btn-change-password" class="btn-save">비밀번호 변경</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="profile.js"></script>
+</body>
+
+</html>

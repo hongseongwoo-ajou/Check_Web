@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로비 - 체스 동아리</title>
+    <link rel="stylesheet" href="../css/global.css">
+    <link rel="stylesheet" href="lobby.css">
+</head>
+
+<body>
+
+    <header class="lobby-header">
+        <div class="header-logo">♟ Chess Club</div>
+        <div class="header-user">
+            <span class="welcome-msg">안녕하세요, <strong id="user-nickname">-</strong>님</span>
+            <a href="../profile/profile.html" class="btn-profile">내 정보</a>
+            <button id="btn-logout" class="btn-logout">로그아웃</button>
+        </div>
+    </header>
+
+    <main class="lobby-main">
+
+        <!-- 액션 버튼 -->
+        <section class="lobby-actions">
+            <button id="btn-create-group" class="btn-action btn-primary">
+                <span class="btn-icon">+</span> 그룹 생성
+            </button>
+            <button id="btn-join-group" class="btn-action btn-secondary">
+                <span class="btn-icon">&#8594;</span> 그룹 참가
+            </button>
+        </section>
+
+        <!-- 그룹 목록 -->
+        <section class="groups-section">
+            <h2 class="section-title">내 그룹</h2>
+            <div id="groups-list" class="groups-list">
+                <p class="empty-msg" id="groups-empty">가입된 그룹이 없습니다.</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- 그룹 생성 모달 -->
+    <div id="modal-create" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">그룹 생성</h3>
+            <div class="form-group">
+                <label for="input-group-name">그룹 이름</label>
+                <input type="text" id="input-group-name" placeholder="그룹 이름을 입력하세요" maxlength="30">
+            </div>
+            <p id="create-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-create" class="btn-primary">만들기</button>
+                <button class="btn-cancel" data-modal="modal-create">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 그룹 참가 모달 -->
+    <div id="modal-join" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">그룹 참가</h3>
+            <div class="form-group">
+                <label for="input-invite-code">초대 코드</label>
+                <input type="text" id="input-invite-code" placeholder="초대 코드 8자리 입력" maxlength="8">
+            </div>
+            <p id="join-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-join" class="btn-primary">참가</button>
+                <button class="btn-cancel" data-modal="modal-join">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="lobby.js"></script>
+</body>
+
+</html>
