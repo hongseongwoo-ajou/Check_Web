@@ -1,0 +1,275 @@
+/* ===== 헤더 ===== */
+.practice-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.header-logo {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    letter-spacing: 0.03em;
+}
+
+.header-placeholder {
+    width: 140px; /* btn-back 너비와 균형 */
+}
+
+.btn-back {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+    white-space: nowrap;
+}
+
+.btn-back:hover {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* ===== 메인 레이아웃 ===== */
+.practice-main {
+    max-width: 960px;
+    margin: 2rem auto;
+    padding: 0 1.5rem 4rem;
+}
+
+.practice-layout {
+    display: grid;
+    grid-template-columns: auto 260px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+/* ===== 체스판 영역 ===== */
+.board-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.practice-board {
+    /* 너비는 JS에서 동적으로 설정 */
+}
+
+/* ===== 컨트롤 버튼 ===== */
+.board-controls {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.ctrl-btn {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.88rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.ctrl-btn-reset {
+    background: transparent;
+    border: 1px solid #e07070;
+    color: #e07070;
+}
+
+.ctrl-btn-reset:hover { background: rgba(224,112,112,0.1); }
+
+.ctrl-btn-undo {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.ctrl-btn-undo:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.ctrl-btn-flip {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.ctrl-btn-flip:hover {
+    border-color: var(--color-text-muted);
+    color: var(--color-text);
+}
+
+/* ===== 사이드바 ===== */
+.practice-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: sticky;
+    top: 1.5rem;
+}
+
+/* ===== 상태 카드 ===== */
+.status-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.turn-dot {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid var(--color-border);
+    transition: background 0.2s;
+}
+
+.turn-dot.white { background: #f0f0f0; border-color: #ccc; }
+.turn-dot.black { background: #222;    border-color: #555; }
+.turn-dot.draw  { background: #7ab8ff; border-color: #5090cc; }
+
+.game-status {
+    font-size: 0.82rem;
+    font-weight: 600;
+    min-height: 1.1em;
+    margin: 0;
+}
+
+.game-status.check     { color: #f0b429; }
+.game-status.checkmate { color: var(--color-primary); }
+.game-status.draw      { color: #7ab8ff; }
+
+/* ===== 수순 카드 ===== */
+.history-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    flex: 1;
+}
+
+.history-heading {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 0.75rem;
+}
+
+.move-history {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+.move-history::-webkit-scrollbar { width: 4px; }
+.move-history::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+.history-row {
+    display: grid;
+    grid-template-columns: 1.8rem 1fr 1fr;
+    gap: 0.2rem;
+    padding: 0.22rem 0.3rem;
+    border-radius: 4px;
+    font-size: 0.88rem;
+    transition: background 0.1s;
+}
+
+.history-row:hover { background: rgba(255,255,255,0.04); }
+
+.h-num {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    padding-top: 0.05rem;
+}
+
+.h-move {
+    color: var(--color-text);
+    font-weight: 500;
+    font-family: 'Courier New', monospace;
+    padding: 0.05rem 0.25rem;
+    border-radius: 3px;
+}
+
+.h-move.latest {
+    background: rgba(226, 185, 111, 0.15);
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.history-empty {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+    padding: 0.5rem 0;
+    margin: 0;
+}
+
+/* ===== 반응형 ===== */
+@media (max-width: 700px) {
+    .practice-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .practice-sidebar {
+        position: static;
+    }
+
+    .move-history {
+        max-height: 200px;
+    }
+}
+
+@media (max-width: 540px) {
+    .practice-main {
+        margin: 1rem auto;
+        padding: 0 0.75rem 3rem;
+    }
+
+    .practice-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .header-logo {
+        display: none;
+    }
+
+    .header-placeholder {
+        display: none;
+    }
+
+    .board-controls {
+        gap: 0.4rem;
+    }
+
+    .ctrl-btn {
+        padding: 0.55rem 0.8rem;
+        font-size: 0.82rem;
+    }
+}

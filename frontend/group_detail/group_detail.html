@@ -7,6 +7,7 @@
     <title>그룹 상세 - 체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
     <link rel="stylesheet" href="group_detail.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
 </head>
 
 <body>
@@ -147,6 +148,53 @@
         </div>
     </div>
 
+    <!-- ===== 기보 추가/수정 모달 ===== -->
+    <div id="modal-pgn-edit" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">기보 추가/수정</h3>
+            <div class="form-group">
+                <label for="input-pgn">PGN 기보</label>
+                <textarea id="input-pgn" class="form-input pgn-textarea"
+                          placeholder="[Event &quot;...&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..." rows="8"></textarea>
+            </div>
+            <p id="pgn-edit-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-pgn" class="btn-primary">저장</button>
+                <button class="btn-cancel" data-modal="modal-pgn-edit">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 기보 뷰어 모달 ===== -->
+    <div id="modal-pgn-viewer" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg modal-pgn-viewer">
+            <div class="lb-modal-header">
+                <h3 class="lb-modal-title" id="pgn-viewer-title">기보 재생</h3>
+                <button class="btn-modal-close btn-cancel" data-modal="modal-pgn-viewer">&#10005;</button>
+            </div>
+            <div class="pgn-viewer-body">
+                <div class="pgn-board-wrap">
+                    <div id="pgn-board"></div>
+                </div>
+                <div class="pgn-controls">
+                    <button id="pgn-btn-first" class="pgn-nav-btn" title="처음으로">&#8676;</button>
+                    <button id="pgn-btn-prev"  class="pgn-nav-btn" title="이전">&#9664;</button>
+                    <span id="pgn-move-counter" class="pgn-move-counter">0 / 0</span>
+                    <button id="pgn-btn-next"  class="pgn-nav-btn" title="다음">&#9654;</button>
+                    <button id="pgn-btn-last"  class="pgn-nav-btn" title="끝으로">&#8677;</button>
+                    <span class="pgn-controls-divider"></span>
+                    <button id="pgn-btn-flip"  class="pgn-nav-btn pgn-btn-flip" title="판 돌리기">&#8645;</button>
+                </div>
+                <div id="pgn-move-list" class="pgn-move-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="group_detail.js"></script>
 </body>
 

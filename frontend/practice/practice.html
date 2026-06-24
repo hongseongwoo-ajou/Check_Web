@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>체스 연습 - 체스 동아리</title>
+    <link rel="stylesheet" href="../css/global.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="stylesheet" href="practice.css">
+</head>
+
+<body>
+
+    <header class="practice-header">
+        <a href="../lobby/lobby.html" class="btn-back">&#8592; 로비로 돌아가기</a>
+        <div class="header-logo">♟ Chess Club</div>
+        <span class="header-placeholder"></span>
+    </header>
+
+    <main class="practice-main">
+        <div class="practice-layout">
+
+            <!-- 체스판 영역 -->
+            <section class="board-section">
+                <div id="practice-board" class="practice-board"></div>
+                <div class="board-controls">
+                    <button id="btn-reset" class="ctrl-btn ctrl-btn-reset">&#8635; 초기화</button>
+                    <button id="btn-undo"  class="ctrl-btn ctrl-btn-undo">&#8592; 무르기</button>
+                    <button id="btn-flip"  class="ctrl-btn ctrl-btn-flip">&#8645; 판 돌리기</button>
+                </div>
+            </section>
+
+            <!-- 사이드바: 상태 + 수순 -->
+            <aside class="practice-sidebar">
+                <div class="status-card">
+                    <div id="turn-indicator" class="turn-indicator">
+                        <span id="turn-dot" class="turn-dot white"></span>
+                        <span id="turn-text">백의 차례</span>
+                    </div>
+                    <p id="game-status" class="game-status"></p>
+                </div>
+
+                <div class="history-card">
+                    <h2 class="history-heading">수순</h2>
+                    <div id="move-history" class="move-history">
+                        <p class="history-empty">아직 수가 없습니다.</p>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="practice.js"></script>
+</body>
+
+</html>

@@ -1,14 +1,17 @@
 from fastapi import FastAPI, HTTPException, Header, Depends, BackgroundTasks
-from services.matchmaker import make_pairs
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+from services.matchmaker import make_pairs
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import sqlite3
 import hashlib
 import secrets
 import urllib.request
 import json
+import os
 
 app = FastAPI(title="체스 동아리 API", version="0.2.0")
 
@@ -19,7 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "chess_club.db"
+DB_PATH = os.environ.get("DB_PATH", "chess_club.db")
+
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst() -> datetime:
+    return datetime.now(KST).replace(tzinfo=None)
 
 # Chess.com PubAPI 가이드라인: User-Agent 명시 필수
 CHESS_COM_USER_AGENT = "ChessClubApp/1.0 (chess club rating tracker)"
@@ -53,7 +62,7 @@ def init_db():
                 name        TEXT    NOT NULL,
                 owner_id    INTEGER NOT NULL,
                 invite_code TEXT    UNIQUE NOT NULL,
-                created_at  TEXT    DEFAULT (datetime('now')),
+                created_at  TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (owner_id) REFERENCES users(id)
             )
         """)
@@ -62,7 +71,7 @@ def init_db():
                 user_id   INTEGER NOT NULL,
                 group_id  INTEGER NOT NULL,
                 role      TEXT    NOT NULL DEFAULT '회원',
-                joined_at TEXT    DEFAULT (datetime('now')),
+                joined_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                 PRIMARY KEY (user_id, group_id),
                 FOREIGN KEY (user_id)  REFERENCES users(id),
                 FOREIGN KEY (group_id) REFERENCES groups(id)
@@ -78,7 +87,7 @@ def init_db():
                 winner_id   INTEGER,
                 recorded_by INTEGER NOT NULL,
                 status      TEXT    NOT NULL DEFAULT 'playing',
-                played_at   TEXT    DEFAULT (datetime('now')),
+                played_at   TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (group_id)    REFERENCES groups(id),
                 FOREIGN KEY (poll_id)     REFERENCES polls(id),
                 FOREIGN KEY (player1_id)  REFERENCES users(id),
@@ -94,7 +103,7 @@ def init_db():
                 created_by INTEGER NOT NULL,
                 title      TEXT    NOT NULL DEFAULT '',
                 status     TEXT    NOT NULL DEFAULT 'voting',
-                created_at TEXT    DEFAULT (datetime('now')),
+                created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (group_id)   REFERENCES groups(id),
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
@@ -112,7 +121,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS poll_votes (
                 poll_id  INTEGER NOT NULL,
                 user_id  INTEGER NOT NULL,
-                voted_at TEXT    DEFAULT (datetime('now')),
+                voted_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                 PRIMARY KEY (poll_id, user_id),
                 FOREIGN KEY (poll_id) REFERENCES polls(id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
@@ -128,11 +137,12 @@ def migrate_db():
         "ALTER TABLE users ADD COLUMN rating_blitz INTEGER",
         "ALTER TABLE users ADD COLUMN rating_rapid INTEGER",
         "ALTER TABLE users ADD COLUMN rating_updated_at TEXT",
-        "ALTER TABLE user_groups ADD COLUMN joined_at TEXT DEFAULT (datetime('now'))",
+        "ALTER TABLE user_groups ADD COLUMN joined_at TEXT DEFAULT (datetime('now', '+9 hours'))",
         "ALTER TABLE user_groups ADD COLUMN role TEXT NOT NULL DEFAULT '회원'",
         "ALTER TABLE matches ADD COLUMN poll_id INTEGER",
         "ALTER TABLE matches ADD COLUMN status TEXT NOT NULL DEFAULT 'playing'",
         "ALTER TABLE polls ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE matches ADD COLUMN pgn_data TEXT",
     ]
     with get_db() as conn:
         for sql in migrations:
@@ -166,7 +176,7 @@ def migrate_db():
                     created_by INTEGER NOT NULL,
                     title      TEXT    NOT NULL DEFAULT '',
                     status     TEXT    NOT NULL DEFAULT 'voting',
-                    created_at TEXT    DEFAULT (datetime('now')),
+                    created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                     FOREIGN KEY (group_id)   REFERENCES groups(id),
                     FOREIGN KEY (created_by) REFERENCES users(id)
                 )
@@ -175,7 +185,7 @@ def migrate_db():
                 CREATE TABLE IF NOT EXISTS poll_votes (
                     poll_id  INTEGER NOT NULL,
                     user_id  INTEGER NOT NULL,
-                    voted_at TEXT    DEFAULT (datetime('now')),
+                    voted_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                     PRIMARY KEY (poll_id, user_id),
                     FOREIGN KEY (poll_id) REFERENCES polls(id),
                     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -251,7 +261,7 @@ def _should_refresh(rating_updated_at: Optional[str]) -> bool:
     if not rating_updated_at:
         return True
     try:
-        elapsed = (datetime.utcnow() - datetime.fromisoformat(rating_updated_at)).total_seconds()
+        elapsed = (now_kst() - datetime.fromisoformat(rating_updated_at)).total_seconds()
         return elapsed > 3600
     except Exception:
         return True
@@ -270,7 +280,7 @@ def update_user_rating(user_id: int, chess_username: str):
             (
                 ratings.get("rating_blitz"),
                 ratings.get("rating_rapid"),
-                datetime.utcnow().isoformat(timespec="seconds"),
+                now_kst().isoformat(timespec="seconds"),
                 user_id,
             ),
         )
@@ -316,6 +326,10 @@ class MatchResultRequest(BaseModel):
     winner_id: Optional[int] = None
 
 
+class UpdatePGNRequest(BaseModel):
+    pgn_data: str
+
+
 class UpdateProfileRequest(BaseModel):
     nickname: str
 
@@ -334,7 +348,7 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Chess Club API"}
+    return RedirectResponse(url="/index/index.html")
 
 
 @app.post("/auth/register")
@@ -445,7 +459,7 @@ async def refresh_chess_rating(user=Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"레이팅 조회 중 오류: {e}")
 
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = now_kst().isoformat(timespec="seconds")
     with get_db() as conn:
         conn.execute(
             "UPDATE users SET rating_blitz = ?, rating_rapid = ?, rating_updated_at = ? WHERE id = ?",
@@ -612,7 +626,7 @@ async def get_group_matches(group_id: int, user=Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
 
         matches = conn.execute(
-            """SELECT m.id, m.played_at,
+            """SELECT m.id, m.played_at, m.pgn_data,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -694,7 +708,7 @@ async def get_active_poll(group_id: int, user=Depends(get_current_user)):
         matches = []
         if poll["status"] == "playing":
             rows = conn.execute(
-                """SELECT m.id, m.status, m.winner_id,
+                """SELECT m.id, m.status, m.winner_id, m.pgn_data,
                           p1.id AS player1_id, p1.nickname AS player1_nickname,
                           p2.id AS player2_id, p2.nickname AS player2_nickname,
                           w.nickname AS winner_nickname
@@ -953,6 +967,32 @@ async def record_match_result(match_id: int, req: MatchResultRequest, user=Depen
     return {"message": "결과가 기록되었습니다."}
 
 
+@app.patch("/api/matches/{match_id}/pgn")
+async def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(get_current_user)):
+    with get_db() as conn:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="매치를 찾을 수 없습니다.")
+
+        is_player = user["id"] in (match["player1_id"], match["player2_id"])
+        if not is_player:
+            role_row = conn.execute(
+                "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
+                (user["id"], match["group_id"]),
+            ).fetchone()
+            if not role_row or role_row["role"] not in ("방장", "임원"):
+                raise HTTPException(status_code=403, detail="권한이 없습니다. 경기 당사자 또는 임원/방장만 기보를 저장할 수 있습니다.")
+
+        pgn = req.pgn_data.strip()
+        if not pgn:
+            raise HTTPException(status_code=400, detail="기보 내용을 입력해주세요.")
+
+        conn.execute("UPDATE matches SET pgn_data = ? WHERE id = ?", (pgn, match_id))
+        conn.commit()
+
+    return {"message": "기보가 저장되었습니다."}
+
+
 # ---------- 대시보드 ----------
 
 @app.get("/api/dashboard")
@@ -1002,3 +1042,9 @@ async def get_dashboard(group_id: int, user=Depends(get_current_user)):
             "avg_blitz": avg_blitz,
         },
     }
+
+
+# ===== 프론트엔드 정적 파일 서빙 (모든 API 라우트 이후에 마운트) =====
+_frontend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
+if os.path.isdir(_frontend):
+    app.mount("/", StaticFiles(directory=_frontend, html=True), name="static")

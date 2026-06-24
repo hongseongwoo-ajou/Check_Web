@@ -30,6 +30,25 @@
     color: var(--color-text);
 }
 
+.btn-practice {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--color-primary);
+    background: rgba(226, 185, 111, 0.1);
+    color: var(--color-primary);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-practice:hover {
+    background: var(--color-primary);
+    color: #1a1a2e;
+    text-decoration: none;
+}
+
 .btn-profile {
     padding: 0.4rem 0.9rem;
     border: 1px solid var(--color-primary);

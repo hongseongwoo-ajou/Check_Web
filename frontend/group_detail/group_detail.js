@@ -1,4 +1,9 @@
-const API_BASE = 'http://localhost:8000';
+const API_BASE = (() => {
+    const { protocol, hostname, port } = window.location;
+    if (protocol === 'file:') return 'http://localhost:8000';
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== '8000') return 'http://localhost:8000';
+    return '';
+})();
 
 // ===== 인증 가드 =====
 
@@ -11,11 +16,23 @@ if (!groupId) window.location.href = '../lobby/lobby.html';
 
 // ===== 상태 =====
 
-let currentMembers = [];
-let currentRole    = '회원';
-let pendingMatchId = null;
-let pendingP1Id    = null;
-let pendingP2Id    = null;
+let currentMembers   = [];
+let currentRole      = '회원';
+let currentUserId    = null;
+let pendingMatchId   = null;
+let pendingP1Id      = null;
+let pendingP2Id      = null;
+let pendingPgnMatchId = null;
+
+// 매치 PGN/선수 캐시 (matchId → {pgn_data, p1, p2})
+const matchDataCache = {};
+
+// ===== PGN 뷰어 상태 =====
+
+let pgnPositions  = [];   // FEN strings: [0]=초기, [n]=n번째 수 후
+let pgnSans       = [];   // SAN 수 목록
+let pgnMoveIndex  = 0;
+let pgnBoardInst  = null; // chessboard.js 인스턴스
 
 // ===== API 헬퍼 =====
 
@@ -60,6 +77,17 @@ function formatDate(dateStr) {
 }
 
 const isAdmin = () => currentRole === '방장' || currentRole === '임원';
+
+// ===== PGN 유효성 검사 (chess.js) =====
+
+function isValidPgn(pgn) {
+    try {
+        const chess = new Chess();
+        return chess.load_pgn(pgn.trim());
+    } catch {
+        return false;
+    }
+}
 
 // ===== 멤버 목록 렌더링 =====
 
@@ -345,11 +373,22 @@ function renderVoting(section, poll, votes, myVote) {
 }
 
 function renderPlaying(section, poll, matches) {
+    // 캐시 업데이트
+    matches.forEach(m => {
+        matchDataCache[m.id] = {
+            pgn_data: m.pgn_data || null,
+            p1: m.player1_nickname,
+            p2: m.player2_nickname,
+        };
+    });
+
     const cards = matches.map(m => {
         if (m.status === 'finished') {
             const isDraw = !m.winner_id;
             const p1Win  = m.winner_id === m.player1_id;
             const p2Win  = m.winner_id === m.player2_id;
+            const hasPgn = !!m.pgn_data;
+            const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
             return `
                 <div class="match-card finished">
                     <div class="match-vs">
@@ -360,6 +399,10 @@ function renderPlaying(section, poll, matches) {
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
                         ${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}
                     </span>
+                    <div class="match-pgn-actions">
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                    </div>
                 </div>`;
         }
         return `
@@ -401,6 +444,20 @@ function renderPlaying(section, poll, matches) {
             ));
         });
     }
+
+    section.querySelectorAll('.btn-pgn-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            openPgnModal(mid, matchDataCache[mid]?.pgn_data || '');
+        });
+    });
+    section.querySelectorAll('.btn-pgn-view').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            const d = matchDataCache[mid];
+            if (d?.pgn_data) openPgnViewer(d.pgn_data, d.p1, d.p2);
+        });
+    });
 }
 
 // ===== 지난 경기 결과 =====
@@ -413,10 +470,22 @@ function renderHistory(matches) {
         return;
     }
 
+    // 캐시 업데이트
+    matches.forEach(m => {
+        matchDataCache[m.id] = {
+            pgn_data: m.pgn_data || null,
+            p1: m.player1_nickname,
+            p2: m.player2_nickname,
+        };
+    });
+
     el.innerHTML = matches.map(m => {
         const isDraw = !m.winner_id;
         const p1Win  = m.winner_id === m.player1_id;
         const p2Win  = m.winner_id === m.player2_id;
+        const hasPgn = !!m.pgn_data;
+        const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
+
         return `
             <div class="match-item">
                 <span class="match-players">
@@ -425,9 +494,27 @@ function renderHistory(matches) {
                     <span class="${p2Win ? 'match-winner-name' : ''}">${escapeHtml(m.player2_nickname)}</span>
                 </span>
                 <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                <span class="match-pgn-actions">
+                    ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
+                    ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                </span>
                 <span class="match-date">${formatDate(m.played_at)}</span>
             </div>`;
     }).join('');
+
+    el.querySelectorAll('.btn-pgn-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            openPgnModal(mid, matchDataCache[mid]?.pgn_data || '');
+        });
+    });
+    el.querySelectorAll('.btn-pgn-view').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            const d = matchDataCache[mid];
+            if (d?.pgn_data) openPgnViewer(d.pgn_data, d.p1, d.p2);
+        });
+    });
 }
 
 // ===== API 액션 =====
@@ -513,6 +600,186 @@ document.getElementById('btn-p1-win').addEventListener('click', () => recordResu
 document.getElementById('btn-draw').addEventListener('click',   () => recordResult(null));
 document.getElementById('btn-p2-win').addEventListener('click', () => recordResult(pendingP2Id));
 
+// ===== 기보 추가/수정 모달 =====
+
+function openPgnModal(matchId, existingPgn) {
+    pendingPgnMatchId = matchId;
+    document.getElementById('input-pgn').value = existingPgn;
+    document.getElementById('pgn-edit-error').textContent = '';
+    document.getElementById('modal-pgn-edit').classList.remove('hidden');
+    setTimeout(() => document.getElementById('input-pgn').focus(), 50);
+}
+
+document.getElementById('btn-confirm-pgn').addEventListener('click', async () => {
+    const pgn     = document.getElementById('input-pgn').value.trim();
+    const errorEl = document.getElementById('pgn-edit-error');
+    errorEl.textContent = '';
+
+    if (!pgn) {
+        errorEl.textContent = '기보를 입력해주세요.';
+        return;
+    }
+
+    // chess.js로 프론트엔드 유효성 검사
+    if (!isValidPgn(pgn)) {
+        errorEl.textContent = '유효하지 않은 기보 형식입니다.';
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-pgn');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+
+    try {
+        const result = await apiFetch(`/api/matches/${pendingPgnMatchId}/pgn`, {
+            method: 'PATCH',
+            body: JSON.stringify({ pgn_data: pgn }),
+        });
+        if (result?.ok) {
+            document.getElementById('modal-pgn-edit').classList.add('hidden');
+            await refreshPage();
+        } else {
+            errorEl.textContent = result?.data?.detail || '저장에 실패했습니다.';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '저장';
+    }
+});
+
+// ===== 기보 뷰어 =====
+
+function openPgnViewer(pgn, p1Name, p2Name) {
+    // PGN 파싱하여 포지션 목록 생성
+    try {
+        const chess = new Chess();
+        if (!chess.load_pgn(pgn)) {
+            alert('기보를 불러올 수 없습니다.');
+            return;
+        }
+        const history = chess.history();
+
+        const temp = new Chess();
+        pgnPositions = [temp.fen()];
+        pgnSans = history;
+        history.forEach(san => {
+            temp.move(san);
+            pgnPositions.push(temp.fen());
+        });
+    } catch {
+        alert('기보를 불러올 수 없습니다.');
+        return;
+    }
+
+    pgnMoveIndex = 0;
+
+    document.getElementById('pgn-viewer-title').textContent =
+        `${p1Name} vs ${p2Name}`;
+    document.getElementById('modal-pgn-viewer').classList.remove('hidden');
+
+    // 보드 크기 계산 (모달 내부 너비 기준)
+    const modalContent = document.querySelector('#modal-pgn-viewer .modal-content');
+    const availableWidth = modalContent ? modalContent.clientWidth - 48 : 340;
+    const boardSize = Math.min(380, availableWidth);
+
+    const boardEl = document.getElementById('pgn-board');
+    boardEl.style.width = boardSize + 'px';
+
+    // 기존 보드 제거 후 재생성
+    if (pgnBoardInst) {
+        pgnBoardInst.destroy();
+        pgnBoardInst = null;
+    }
+
+    // DOM 렌더링 후 보드 초기화
+    requestAnimationFrame(() => {
+        pgnBoardInst = Chessboard('pgn-board', {
+            position: pgnPositions[0],
+            pieceTheme: function(piece) {
+                const wiki = {
+                    wK: '4/42/Chess_klt45.svg', wQ: '1/15/Chess_qlt45.svg',
+                    wR: '7/72/Chess_rlt45.svg', wB: 'b/b1/Chess_blt45.svg',
+                    wN: '7/70/Chess_nlt45.svg', wP: '4/45/Chess_plt45.svg',
+                    bK: 'f/f0/Chess_kdt45.svg', bQ: '4/47/Chess_qdt45.svg',
+                    bR: 'f/ff/Chess_rdt45.svg', bB: '9/98/Chess_bdt45.svg',
+                    bN: 'e/ef/Chess_ndt45.svg', bP: 'c/c7/Chess_pdt45.svg',
+                };
+                return 'https://upload.wikimedia.org/wikipedia/commons/' + wiki[piece];
+            },
+        });
+        renderMoveList();
+        updateViewerControls();
+    });
+}
+
+function renderMoveList() {
+    const el = document.getElementById('pgn-move-list');
+    if (!pgnSans.length) {
+        el.innerHTML = '<span class="pgn-no-moves">수가 없습니다.</span>';
+        return;
+    }
+
+    const pairs = [];
+    for (let i = 0; i < pgnSans.length; i += 2) {
+        pairs.push({
+            num: Math.floor(i / 2) + 1,
+            white: { san: pgnSans[i],     idx: i + 1 },
+            black: pgnSans[i + 1] ? { san: pgnSans[i + 1], idx: i + 2 } : null,
+        });
+    }
+
+    el.innerHTML = pairs.map(p => `
+        <span class="pgn-move-num">${p.num}.</span>
+        <span class="pgn-move-san${pgnMoveIndex === p.white.idx ? ' active' : ''}"
+              data-idx="${p.white.idx}">${escapeHtml(p.white.san)}</span>
+        ${p.black
+            ? `<span class="pgn-move-san${pgnMoveIndex === p.black.idx ? ' active' : ''}"
+                     data-idx="${p.black.idx}">${escapeHtml(p.black.san)}</span>`
+            : ''}
+    `).join('');
+
+    el.querySelectorAll('.pgn-move-san').forEach(span => {
+        span.addEventListener('click', () => pgnGoTo(parseInt(span.dataset.idx)));
+    });
+
+    // 현재 활성 수가 보이도록 스크롤
+    const active = el.querySelector('.pgn-move-san.active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function updateViewerControls() {
+    const total = pgnPositions.length - 1;
+    document.getElementById('pgn-move-counter').textContent = `${pgnMoveIndex} / ${total}`;
+    document.getElementById('pgn-btn-first').disabled = pgnMoveIndex === 0;
+    document.getElementById('pgn-btn-prev').disabled  = pgnMoveIndex === 0;
+    document.getElementById('pgn-btn-next').disabled  = pgnMoveIndex >= total;
+    document.getElementById('pgn-btn-last').disabled  = pgnMoveIndex >= total;
+}
+
+function pgnGoTo(index) {
+    pgnMoveIndex = Math.max(0, Math.min(index, pgnPositions.length - 1));
+    if (pgnBoardInst) pgnBoardInst.position(pgnPositions[pgnMoveIndex], false);
+    renderMoveList();
+    updateViewerControls();
+}
+
+document.getElementById('pgn-btn-first').addEventListener('click', () => pgnGoTo(0));
+document.getElementById('pgn-btn-prev').addEventListener('click',  () => pgnGoTo(pgnMoveIndex - 1));
+document.getElementById('pgn-btn-next').addEventListener('click',  () => pgnGoTo(pgnMoveIndex + 1));
+document.getElementById('pgn-btn-last').addEventListener('click',  () => pgnGoTo(pgnPositions.length - 1));
+document.getElementById('pgn-btn-flip').addEventListener('click',  () => {
+    if (pgnBoardInst) pgnBoardInst.orientation('flip');
+});
+
+// 뷰어 키보드 단축키
+document.addEventListener('keydown', e => {
+    if (document.getElementById('modal-pgn-viewer').classList.contains('hidden')) return;
+    if (e.key === 'ArrowLeft')  pgnGoTo(pgnMoveIndex - 1);
+    if (e.key === 'ArrowRight') pgnGoTo(pgnMoveIndex + 1);
+    if (e.key === 'Home')       pgnGoTo(0);
+    if (e.key === 'End')        pgnGoTo(pgnPositions.length - 1);
+});
+
 // ===== 데이터 로드 =====
 
 async function refreshPoll() {
@@ -521,10 +788,11 @@ async function refreshPoll() {
 }
 
 async function refreshPage() {
-    const [membersRes, pollRes, historyRes] = await Promise.all([
+    const [membersRes, pollRes, historyRes, meRes] = await Promise.all([
         apiFetch(`/api/groups/${groupId}/members`),
         apiFetch(`/api/groups/${groupId}/polls/active`),
         apiFetch(`/api/groups/${groupId}/matches`),
+        apiFetch('/api/me'),
     ]);
 
     if (!membersRes?.ok) {
@@ -543,6 +811,7 @@ async function refreshPage() {
 
     currentMembers = members;
     currentRole    = current_role;
+    if (meRes?.ok) currentUserId = meRes.data.id;
 
     renderMembers(members);
 
@@ -555,13 +824,26 @@ async function refreshPage() {
 document.querySelectorAll('.btn-cancel').forEach(btn => {
     btn.addEventListener('click', () => {
         const id = btn.dataset.modal;
-        if (id) document.getElementById(id).classList.add('hidden');
+        if (id) {
+            document.getElementById(id).classList.add('hidden');
+            // 뷰어 닫을 때 보드 정리
+            if (id === 'modal-pgn-viewer' && pgnBoardInst) {
+                pgnBoardInst.destroy();
+                pgnBoardInst = null;
+            }
+        }
     });
 });
 
 document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
     backdrop.addEventListener('click', () => {
-        document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+        document.querySelectorAll('.modal').forEach(m => {
+            m.classList.add('hidden');
+        });
+        if (pgnBoardInst) {
+            pgnBoardInst.destroy();
+            pgnBoardInst = null;
+        }
     });
 });
 

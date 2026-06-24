@@ -936,6 +936,175 @@
     white-space: nowrap;
 }
 
+/* ===== 기보 버튼 ===== */
+.match-pgn-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.btn-pgn-edit,
+.btn-pgn-view {
+    padding: 0.28rem 0.6rem;
+    border-radius: var(--radius);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-pgn-edit {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.btn-pgn-edit:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.btn-pgn-view {
+    background: rgba(226, 185, 111, 0.1);
+    border: 1px solid rgba(226, 185, 111, 0.35);
+    color: var(--color-primary);
+}
+
+.btn-pgn-view:hover {
+    background: rgba(226, 185, 111, 0.2);
+}
+
+/* ===== 기보 textarea ===== */
+.pgn-textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    resize: vertical;
+    min-height: 140px;
+    line-height: 1.5;
+}
+
+/* ===== 기보 뷰어 모달 ===== */
+.modal-pgn-viewer {
+    max-width: 500px;
+}
+
+.pgn-viewer-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.pgn-board-wrap {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+#pgn-board {
+    /* 너비는 JS에서 동적으로 설정 */
+}
+
+/* ===== 뷰어 컨트롤 ===== */
+.pgn-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pgn-nav-btn {
+    width: 2.2rem;
+    height: 2.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-size: 0.85rem;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.pgn-nav-btn:hover:not(:disabled) {
+    background: rgba(226, 185, 111, 0.1);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.pgn-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.pgn-controls-divider {
+    width: 1px;
+    height: 1.4rem;
+    background: var(--color-border);
+    margin: 0 0.15rem;
+}
+
+.pgn-btn-flip {
+    color: var(--color-text-muted);
+    font-size: 1rem;
+}
+
+.pgn-move-counter {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    font-family: 'Courier New', monospace;
+    min-width: 4rem;
+    text-align: center;
+}
+
+/* ===== 수 목록 ===== */
+.pgn-move-list {
+    width: 100%;
+    max-height: 130px;
+    overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.1rem 0.25rem;
+    padding: 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 0.82rem;
+    line-height: 1.8;
+}
+
+.pgn-move-num {
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    user-select: none;
+    margin-left: 0.25rem;
+}
+
+.pgn-move-san {
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.pgn-move-san:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.pgn-move-san.active {
+    background: rgba(226, 185, 111, 0.18);
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.pgn-no-moves {
+    color: var(--color-text-muted);
+    font-style: italic;
+    font-size: 0.82rem;
+}
+
 /* ===== 반응형 ===== */
 @media (max-width: 720px) {
     .detail-main {
@@ -1034,6 +1203,10 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 0.5rem;
+    }
+
+    .match-pgn-actions {
+        flex-wrap: wrap;
     }
 
     .btn-record-result {

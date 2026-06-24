@@ -1,4 +1,9 @@
-const API_BASE = 'http://localhost:8000';
+const API_BASE = (() => {
+    const { protocol, hostname, port } = window.location;
+    if (protocol === 'file:') return 'http://localhost:8000';
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== '8000') return 'http://localhost:8000';
+    return '';
+})();
 
 // ===== 인증 가드 =====
 
@@ -42,8 +47,14 @@ function setMsg(id, text, type = '') {
 function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
-        const d = new Date(dateStr.replace(' ', 'T') + (dateStr.includes('T') ? '' : 'Z'));
-        return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const d = new Date(dateStr.replace(' ', 'T') + '+09:00');
+        return d.toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
     } catch {
         return dateStr.slice(0, 10);
     }

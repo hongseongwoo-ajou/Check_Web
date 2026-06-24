@@ -1,4 +1,9 @@
-const API_BASE = 'http://localhost:8000';
+const API_BASE = (() => {
+    const { protocol, hostname, port } = window.location;
+    if (protocol === 'file:') return 'http://localhost:8000';
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== '8000') return 'http://localhost:8000';
+    return '';
+})();
 
 async function checkServerStatus() {
     const el = document.getElementById('server-status');
