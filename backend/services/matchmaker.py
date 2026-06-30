@@ -41,8 +41,8 @@ def _pair_cost(p1: dict, p2: dict, recent_pairs: set) -> float:
     낮을수록 좋은 매칭.
     레이팅 차이 + 최근 대결 패널티.
     """
-    r1 = p1["rating_blitz"] or DEFAULT_RATING
-    r2 = p2["rating_blitz"] or DEFAULT_RATING
+    r1 = p1["rating_rapid"] or DEFAULT_RATING
+    r2 = p2["rating_rapid"] or DEFAULT_RATING
     cost = abs(r1 - r2)
 
     key = (min(p1["id"], p2["id"]), max(p1["id"], p2["id"]))
@@ -70,17 +70,19 @@ def make_pairs(
     voters: list,
     conn,
     group_id: int,
+    is_color_automatic: bool = True,
 ) -> tuple[list, Optional[dict]]:
     """
     최소 비용 Greedy 매칭.
 
     Args:
-        voters    – [{"id", "nickname", "rating_blitz", "role"}, ...]
-        conn      – SQLite 커넥션 (최근 대결 조회용)
-        group_id  – 그룹 ID
+        voters             – [{"id", "nickname", "rating_rapid", "role"}, ...]
+        conn               – SQLite 커넥션 (최근 대결 조회용)
+        group_id           – 그룹 ID
+        is_color_automatic – True이면 흑/백(player1/player2) 무작위 배정
 
     Returns:
-        pairs      – [(player1_dict, player2_dict), ...]
+        pairs      – [(white_dict, black_dict), ...]  player1=백, player2=흑
         bye_player – 제외된 플레이어 (None이면 짝수)
 
     시간 복잡도: O(N² log N)
@@ -117,5 +119,12 @@ def make_pairs(
             pairs.append((p1, p2))
             paired.add(p1["id"])
             paired.add(p2["id"])
+
+    # 흑/백 자동 배정: pair 순서를 무작위로 뒤집어 player1=백, player2=흑 결정
+    if is_color_automatic:
+        pairs = [
+            (p1, p2) if random.random() < 0.5 else (p2, p1)
+            for p1, p2 in pairs
+        ]
 
     return pairs, bye_player

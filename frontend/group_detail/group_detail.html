@@ -32,9 +32,21 @@
                             초대 코드: <code id="invite-code" class="invite-code">-</code>
                             <button id="btn-copy" class="btn-copy" title="복사">복사</button>
                         </div>
+                        <button id="btn-group-settings" class="btn-group-settings hidden">그룹 설정</button>
                         <button id="btn-leaderboard" class="btn-leaderboard">순위표 보기</button>
                     </div>
                 </div>
+
+                <!-- 공지사항 -->
+                <section id="announcement-section" class="detail-card">
+                    <div class="card-head-row">
+                        <h2 class="card-heading">공지사항</h2>
+                        <button id="btn-write-announcement" class="btn-write-announcement hidden">+ 공지 작성</button>
+                    </div>
+                    <div id="announcement-latest">
+                        <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                    </div>
+                </section>
 
                 <!-- 진행 중인 투표 / 대진표 (JS로 동적 렌더링) -->
                 <section id="poll-section" class="detail-card">
@@ -176,7 +188,9 @@
             </div>
             <div class="pgn-viewer-body">
                 <div class="pgn-board-wrap">
+                    <div id="pgn-player-black" class="pgn-player pgn-player-black">⬛ 흑: -</div>
                     <div id="pgn-board"></div>
+                    <div id="pgn-player-white" class="pgn-player pgn-player-white">⬜ 백: -</div>
                 </div>
                 <div class="pgn-controls">
                     <button id="pgn-btn-first" class="pgn-nav-btn" title="처음으로">&#8676;</button>
@@ -188,6 +202,94 @@
                     <button id="pgn-btn-flip"  class="pgn-nav-btn pgn-btn-flip" title="판 돌리기">&#8645;</button>
                 </div>
                 <div id="pgn-move-list" class="pgn-move-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 그룹 설정 모달 ===== -->
+    <div id="modal-group-settings" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="lb-modal-header">
+                <h3 class="lb-modal-title">그룹 설정</h3>
+                <button class="btn-modal-close btn-cancel" data-modal="modal-group-settings">&#10005;</button>
+            </div>
+
+            <!-- 대진 설정 -->
+            <div class="gs-section">
+                <h4 class="gs-section-title">대진 설정</h4>
+                <div class="gs-toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-title">흑/백 자동 배정</span>
+                        <span class="toggle-desc">대진 생성 시 흑/백을 무작위 배정합니다</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="gs-input-color-auto" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <p id="gs-msg" class="settings-msg"></p>
+            </div>
+
+            <!-- 위험 구역 (방장 전용) -->
+            <div class="gs-section gs-danger-section hidden" id="gs-danger-zone">
+                <h4 class="gs-section-title gs-danger-title">위험 구역</h4>
+                <p class="gs-danger-desc">그룹을 삭제하면 모든 매치·투표·멤버 데이터가 영구 삭제됩니다.</p>
+                <button id="btn-open-delete-group" class="btn-danger-outline">그룹 삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 그룹 삭제 확인 모달 ===== -->
+    <div id="modal-delete-group" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title modal-title-danger">그룹 삭제</h3>
+            <p class="modal-warning-text">
+                이 작업은 <strong>되돌릴 수 없습니다.</strong><br>
+                모든 매치 기록, 투표, 멤버 데이터가 영구 삭제됩니다.
+            </p>
+            <p id="delete-group-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-delete-group" class="btn-danger">삭제 확인</button>
+                <button class="btn-cancel" data-modal="modal-delete-group">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 공지사항 전체보기 모달 ===== -->
+    <div id="modal-announcement-list" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="lb-modal-header">
+                <h3 class="lb-modal-title">공지사항</h3>
+                <button class="btn-modal-close btn-cancel" data-modal="modal-announcement-list">&#10005;</button>
+            </div>
+            <div id="announcement-list-content">
+                <p class="loading-msg" style="text-align:center">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 공지 작성 모달 ===== -->
+    <div id="modal-create-announcement" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">공지 작성</h3>
+            <div class="form-group">
+                <label for="input-announcement-title">제목</label>
+                <input type="text" id="input-announcement-title" class="form-input"
+                       placeholder="공지 제목" maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="input-announcement-content">내용</label>
+                <textarea id="input-announcement-content" class="form-input announcement-textarea"
+                          placeholder="공지 내용을 입력하세요" rows="6"></textarea>
+            </div>
+            <p id="create-announcement-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-create-announcement" class="btn-primary">등록</button>
+                <button class="btn-cancel" data-modal="modal-create-announcement">취소</button>
             </div>
         </div>
     </div>

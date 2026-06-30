@@ -78,17 +78,8 @@ async function loadUser() {
 }
 
 function renderRatings(user) {
-    const blitzEl   = document.getElementById('display-blitz');
     const rapidEl   = document.getElementById('display-rapid');
     const updatedEl = document.getElementById('display-updated');
-
-    if (user.rating_blitz) {
-        blitzEl.textContent = user.rating_blitz;
-        blitzEl.className = 'rating-value';
-    } else {
-        blitzEl.textContent = '-';
-        blitzEl.className = 'rating-value muted';
-    }
 
     if (user.rating_rapid) {
         rapidEl.textContent = user.rating_rapid;
@@ -116,7 +107,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
     setMsg('profile-msg', '');
 
     if (!nickname) {
-        setMsg('profile-msg', '닉네임을 입력해주세요.', 'error');
+        setMsg('profile-msg', '이름을 입력해주세요.', 'error');
         return;
     }
 
@@ -134,7 +125,7 @@ document.getElementById('btn-save-profile').addEventListener('click', async () =
         if (result.ok) {
             currentUser.nickname = result.data.nickname;
             localStorage.setItem('nickname', result.data.nickname);
-            setMsg('profile-msg', '닉네임이 변경되었습니다.', 'success');
+            setMsg('profile-msg', '이름이 변경되었습니다.', 'success');
             setTimeout(() => setMsg('profile-msg', ''), 3000);
         } else {
             setMsg('profile-msg', result.data.detail || '저장에 실패했습니다.', 'error');
@@ -184,7 +175,6 @@ document.getElementById('btn-save-chess').addEventListener('click', async () => 
         if (!refresh) return;
 
         if (refresh.ok) {
-            currentUser.rating_blitz = refresh.data.rating_blitz;
             currentUser.rating_rapid = refresh.data.rating_rapid;
             currentUser.rating_updated_at = refresh.data.updated_at;
             renderRatings(currentUser);
@@ -218,7 +208,6 @@ document.getElementById('btn-refresh-chess').addEventListener('click', async () 
         if (!result) return;
 
         if (result.ok) {
-            currentUser.rating_blitz = result.data.rating_blitz;
             currentUser.rating_rapid = result.data.rating_rapid;
             currentUser.rating_updated_at = result.data.updated_at;
             renderRatings(currentUser);
