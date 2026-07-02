@@ -3,4 +3,4 @@ uvicorn[standard]
 aiofiles
 bcrypt
 slowapi
-libsql-experimental
+requests

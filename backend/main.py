@@ -61,17 +61,14 @@ CHESS_COM_USER_AGENT = "ChessClubApp/1.0 (chess club rating tracker)"
 @contextlib.contextmanager
 def get_db():
     if TURSO_URL and TURSO_TOKEN:
-        import libsql_experimental as libsql
-        conn = libsql.connect(DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
-        conn.sync()
+        import turso_http
+        conn = turso_http.connect(TURSO_URL, TURSO_TOKEN)
     else:
         conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row
     try:
         yield conn
         conn.commit()
-        if TURSO_URL and TURSO_TOKEN:
-            conn.sync()
     except Exception:
         conn.rollback()
         raise
