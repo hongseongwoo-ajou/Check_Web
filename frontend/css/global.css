@@ -4,6 +4,10 @@
     padding: 0;
 }
 
+.hidden {
+    display: none !important;
+}
+
 :root {
     --color-bg: #1a1a2e;
     --color-surface: #16213e;
