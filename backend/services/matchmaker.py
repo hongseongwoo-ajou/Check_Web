@@ -8,9 +8,9 @@ cost(A, B) = |rating_A - rating_B| + RECENT_PENALTY (최근 맞붙은 이력 있
 import random
 from typing import Optional
 
-RECENT_PENALTY   = 400   # 최근 대결 시 부과할 레이팅 포인트 패널티
+RECENT_PENALTY   = 200   # 최근 대결 시 부과할 레이팅 포인트 패널티
 DEFAULT_RATING   = 800   # 미등록 멤버의 기본 레이팅
-LOOKBACK_MATCHES = 20    # 최근 대결 여부 판단에 사용할 경기 수
+LOOKBACK_MATCHES = 5     # 최근 대결 여부 판단에 사용할 경기 수
 
 
 # ---------- 헬퍼 ----------

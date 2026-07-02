@@ -6,7 +6,7 @@ Usage (backend/ 디렉터리에서 실행):
 
 주의: 기존 데이터를 전부 삭제하고 새로운 테스트 데이터를 삽입합니다.
 
-생성 데이터 요약
+생성 데이터 요약`
   • 유저 15명  (비밀번호: 1234)
   • 그룹 2개
       G1 아주대 체스 동아리 : 12명, 투표 14개 (완료12 · 진행중1 · 투표중1)
@@ -14,7 +14,7 @@ Usage (backend/ 디렉터리에서 실행):
   • 초대코드: G1=ABCD1234 / G2=EF567890
 """
 
-import hashlib
+import bcrypt
 import io
 import os
 import sqlite3
@@ -69,7 +69,7 @@ def kst(delta_days: int = 0, delta_hours: int = 0) -> str:
 
 
 def hp(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
 
 
 # ─── 메인 ────────────────────────────────────────────────────────────────────

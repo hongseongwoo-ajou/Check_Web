@@ -1,23 +1,39 @@
-from fastapi import FastAPI, HTTPException, Header, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from services.matchmaker import make_pairs
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import sqlite3
 import hashlib
 import secrets
+import bcrypt
 import urllib.request
 import json
 import os
+import re
+
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = _origins_env.split(",") if _origins_env else ["*"]
+
+TOKEN_EXPIRE_DAYS = 30
+
+USERNAME_RE = re.compile(r'^[a-zA-Z0-9_가-힣]+$')
+
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="체스 동아리 API", version="0.2.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -50,6 +66,7 @@ def init_db():
                 nickname          TEXT    NOT NULL,
                 password          TEXT    NOT NULL,
                 token             TEXT,
+                token_expires_at  TEXT,
                 chess_username    TEXT,
                 rating_rapid      INTEGER,
                 rating_updated_at TEXT
@@ -139,6 +156,18 @@ def init_db():
                 FOREIGN KEY (author_id) REFERENCES users(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id   INTEGER NOT NULL,
+                user_id    INTEGER NOT NULL,
+                action     TEXT    NOT NULL,
+                detail     TEXT    NOT NULL DEFAULT '',
+                created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+                FOREIGN KEY (group_id) REFERENCES groups(id),
+                FOREIGN KEY (user_id)  REFERENCES users(id)
+            )
+        """)
         conn.commit()
 
 
@@ -148,6 +177,7 @@ def migrate_db():
         "ALTER TABLE users ADD COLUMN chess_username TEXT",
         "ALTER TABLE users ADD COLUMN rating_rapid INTEGER",
         "ALTER TABLE users ADD COLUMN rating_updated_at TEXT",
+        "ALTER TABLE users ADD COLUMN token_expires_at TEXT",
         "ALTER TABLE user_groups ADD COLUMN joined_at TEXT DEFAULT (datetime('now', '+9 hours'))",
         "ALTER TABLE user_groups ADD COLUMN role TEXT NOT NULL DEFAULT '회원'",
         "ALTER TABLE matches ADD COLUMN poll_id INTEGER",
@@ -155,6 +185,16 @@ def migrate_db():
         "ALTER TABLE polls ADD COLUMN title TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE matches ADD COLUMN pgn_data TEXT",
         "ALTER TABLE group_settings ADD COLUMN is_color_automatic INTEGER NOT NULL DEFAULT 1",
+        """CREATE TABLE IF NOT EXISTS activity_logs (
+               id         INTEGER PRIMARY KEY AUTOINCREMENT,
+               group_id   INTEGER NOT NULL,
+               user_id    INTEGER NOT NULL,
+               action     TEXT    NOT NULL,
+               detail     TEXT    NOT NULL DEFAULT '',
+               created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+               FOREIGN KEY (group_id) REFERENCES groups(id),
+               FOREIGN KEY (user_id)  REFERENCES users(id)
+           )""",
     ]
     with get_db() as conn:
         for sql in migrations:
@@ -245,7 +285,18 @@ migrate_db()
 # ---------- 유틸 ----------
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(plain: str, stored: str) -> bool:
+    """bcrypt 해시 검증. 구형 sha256 해시이면 평문 비교 후 True 반환해 마이그레이션 트리거."""
+    if _is_sha256(stored):
+        return hashlib.sha256(plain.encode()).hexdigest() == stored
+    return bcrypt.checkpw(plain.encode(), stored.encode())
+
+
+def _is_sha256(h: str) -> bool:
+    return len(h) == 64 and all(c in "0123456789abcdef" for c in h)
 
 
 def get_current_user(authorization: Optional[str] = Header(None)):
@@ -256,6 +307,13 @@ def get_current_user(authorization: Optional[str] = Header(None)):
         row = conn.execute("SELECT * FROM users WHERE token = ?", (token,)).fetchone()
     if not row:
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+    if row["token_expires_at"]:
+        try:
+            expires = datetime.fromisoformat(row["token_expires_at"])
+            if now_kst() > expires:
+                raise HTTPException(status_code=401, detail="세션이 만료되었습니다. 다시 로그인해주세요.")
+        except ValueError:
+            pass
     return row
 
 
@@ -319,9 +377,9 @@ def update_user_rating(user_id: int, chess_username: str):
 # ---------- 스키마 ----------
 
 class RegisterRequest(BaseModel):
-    username: str
-    nickname: str
-    password: str
+    username: str = Field(min_length=3, max_length=30)
+    nickname: str = Field(min_length=1, max_length=20)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class LoginRequest(BaseModel):
@@ -330,7 +388,7 @@ class LoginRequest(BaseModel):
 
 
 class CreateGroupRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=2, max_length=50)
 
 
 class JoinGroupRequest(BaseModel):
@@ -360,13 +418,25 @@ class UpdatePGNRequest(BaseModel):
     pgn_data: str
 
 
+class EditMatchRequest(BaseModel):
+    player1_id: int
+    player2_id: int
+    result: str  # "p1_win" | "p2_win" | "draw" | "none"
+
+
+class AddMatchRequest(BaseModel):
+    player1_id: int
+    player2_id: int
+    result: str  # "p1_win" | "p2_win" | "draw"
+
+
 class UpdateProfileRequest(BaseModel):
-    nickname: str
+    nickname: str = Field(min_length=1, max_length=20)
 
 
 class UpdatePasswordRequest(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class UpdateMemberRoleRequest(BaseModel):
@@ -374,8 +444,8 @@ class UpdateMemberRoleRequest(BaseModel):
 
 
 class CreateAnnouncementRequest(BaseModel):
-    title: str
-    content: str
+    title: str = Field(min_length=1, max_length=100)
+    content: str = Field(min_length=1, max_length=2000)
 
 
 # ---------- 인증 ----------
@@ -392,10 +462,10 @@ async def root():
 
 @app.post("/auth/register")
 async def register(req: RegisterRequest):
-    if len(req.username) < 3:
-        raise HTTPException(status_code=400, detail="아이디는 3자 이상이어야 합니다.")
-    if len(req.password) < 4:
-        raise HTTPException(status_code=400, detail="비밀번호는 4자 이상이어야 합니다.")
+    if not USERNAME_RE.match(req.username):
+        raise HTTPException(status_code=400, detail="아이디는 영문, 숫자, 한글, 밑줄(_)만 사용할 수 있습니다.")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="비밀번호는 8자 이상이어야 합니다.")
 
     try:
         with get_db() as conn:
@@ -411,19 +481,30 @@ async def register(req: RegisterRequest):
 
 
 @app.post("/auth/login")
-async def login(req: LoginRequest, background_tasks: BackgroundTasks):
+@limiter.limit("10/minute")
+async def login(request: Request, req: LoginRequest, background_tasks: BackgroundTasks):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (req.username, hash_password(req.password)),
+            "SELECT * FROM users WHERE username = ?",
+            (req.username,),
         ).fetchone()
 
-    if not row:
+    if not row or not _verify_password(req.password, row["password"]):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 틀렸습니다.")
 
     token = secrets.token_hex(32)
+    expires_at = (now_kst() + timedelta(days=TOKEN_EXPIRE_DAYS)).isoformat(timespec="seconds")
     with get_db() as conn:
-        conn.execute("UPDATE users SET token = ? WHERE username = ?", (token, req.username))
+        if _is_sha256(row["password"]):
+            conn.execute(
+                "UPDATE users SET token = ?, token_expires_at = ?, password = ? WHERE username = ?",
+                (token, expires_at, hash_password(req.password), req.username),
+            )
+        else:
+            conn.execute(
+                "UPDATE users SET token = ?, token_expires_at = ? WHERE username = ?",
+                (token, expires_at, req.username),
+            )
         conn.commit()
 
     # 연동된 Chess.com 계정이 있고 1시간 이상 지났을 때만 백그라운드 갱신
@@ -431,6 +512,17 @@ async def login(req: LoginRequest, background_tasks: BackgroundTasks):
         background_tasks.add_task(update_user_rating, row["id"], row["chess_username"])
 
     return {"access_token": token, "nickname": row["nickname"]}
+
+
+@app.post("/auth/logout")
+async def logout(user=Depends(get_current_user)):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET token = NULL, token_expires_at = NULL WHERE id = ?",
+            (user["id"],),
+        )
+        conn.commit()
+    return {"message": "로그아웃되었습니다."}
 
 
 # ---------- 유저 ----------
@@ -460,10 +552,8 @@ async def update_profile(req: UpdateProfileRequest, user=Depends(get_current_use
 
 @app.patch("/api/me/password")
 async def update_password(req: UpdatePasswordRequest, user=Depends(get_current_user)):
-    if hash_password(req.current_password) != user["password"]:
+    if not _verify_password(req.current_password, user["password"]):
         raise HTTPException(status_code=400, detail="현재 비밀번호가 일치하지 않습니다.")
-    if len(req.new_password) < 4:
-        raise HTTPException(status_code=400, detail="새 비밀번호는 4자 이상이어야 합니다.")
     with get_db() as conn:
         conn.execute(
             "UPDATE users SET password = ? WHERE id = ?",
@@ -520,6 +610,8 @@ async def update_chess_username(
     chess_username = req.chess_username.strip()
     if not chess_username:
         raise HTTPException(status_code=400, detail="Chess.com 아이디를 입력해주세요.")
+    if not re.match(r'^[a-zA-Z0-9_-]{3,25}$', chess_username):
+        raise HTTPException(status_code=400, detail="Chess.com 아이디는 3~25자의 영문자, 숫자, -, _만 사용 가능합니다.")
 
     with get_db() as conn:
         conn.execute(
@@ -591,11 +683,14 @@ async def join_group(req: JoinGroupRequest, user=Depends(get_current_user)):
         if already:
             raise HTTPException(status_code=409, detail="이미 가입된 그룹입니다.")
 
-        conn.execute(
-            "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
-            (user["id"], group["id"]),
-        )
-        conn.commit()
+        try:
+            conn.execute(
+                "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
+                (user["id"], group["id"]),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="이미 가입된 그룹입니다.")
 
     return {"id": group["id"], "name": group["name"]}
 
@@ -656,10 +751,15 @@ async def kick_member(group_id: int, member_id: int, user=Depends(get_current_us
         if my_row["role"] == "임원" and target_row["role"] == "임원":
             raise HTTPException(status_code=403, detail="임원은 다른 임원을 강퇴할 수 없습니다.")
 
+        target_user = conn.execute(
+            "SELECT nickname FROM users WHERE id = ?", (member_id,)
+        ).fetchone()
+        target_nick = target_user["nickname"] if target_user else f"#{member_id}"
         conn.execute(
             "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
             (member_id, group_id),
         )
+        _log(conn, group_id, user["id"], "멤버_강퇴", f"{target_nick}님 강퇴")
         conn.commit()
 
     return {"message": "멤버가 강퇴되었습니다."}
@@ -750,10 +850,16 @@ async def update_member_role(
         if target_row["role"] == "방장":
             raise HTTPException(status_code=400, detail="방장의 역할은 변경할 수 없습니다.")
 
+        target_user = conn.execute(
+            "SELECT nickname FROM users WHERE id = ?", (member_id,)
+        ).fetchone()
+        target_nick = target_user["nickname"] if target_user else f"#{member_id}"
         conn.execute(
             "UPDATE user_groups SET role = ? WHERE user_id = ? AND group_id = ?",
             (req.role, member_id, group_id),
         )
+        _log(conn, group_id, user["id"], "역할_변경",
+             f"{target_nick}님 역할 변경: {target_row['role']} → {req.role}")
         conn.commit()
 
     return {"message": f"역할이 '{req.role}'(으)로 변경되었습니다.", "role": req.role}
@@ -953,6 +1059,13 @@ def _check_admin(conn, user_id: int, group_id: int):
     return row["role"]
 
 
+def _log(conn, group_id: int, user_id: int, action: str, detail: str = ""):
+    conn.execute(
+        "INSERT INTO activity_logs (group_id, user_id, action, detail) VALUES (?, ?, ?, ?)",
+        (group_id, user_id, action, detail),
+    )
+
+
 @app.post("/api/groups/{group_id}/polls", status_code=201)
 async def create_poll(group_id: int, req: CreatePollRequest, user=Depends(get_current_user)):
     with get_db() as conn:
@@ -1037,19 +1150,22 @@ async def toggle_vote(poll_id: int, user=Depends(get_current_user)):
             (poll_id, user["id"]),
         ).fetchone()
 
-        if existing:
-            conn.execute(
-                "DELETE FROM poll_votes WHERE poll_id = ? AND user_id = ?",
-                (poll_id, user["id"]),
-            )
-            voted = False
-        else:
-            conn.execute(
-                "INSERT INTO poll_votes (poll_id, user_id) VALUES (?, ?)",
-                (poll_id, user["id"]),
-            )
-            voted = True
-        conn.commit()
+        try:
+            if existing:
+                conn.execute(
+                    "DELETE FROM poll_votes WHERE poll_id = ? AND user_id = ?",
+                    (poll_id, user["id"]),
+                )
+                voted = False
+            else:
+                conn.execute(
+                    "INSERT INTO poll_votes (poll_id, user_id) VALUES (?, ?)",
+                    (poll_id, user["id"]),
+                )
+                voted = True
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="이미 처리된 요청입니다. 다시 시도해주세요.")
 
     return {"voted": voted}
 
@@ -1094,12 +1210,82 @@ async def close_poll(poll_id: int, user=Depends(get_current_user)):
             )
 
         conn.execute("UPDATE polls SET status = 'playing' WHERE id = ?", (poll_id,))
+        bye_str = f", {bye_player['nickname']}님 제외" if bye_player else ""
+        _log(conn, poll["group_id"], user["id"], "투표_종료",
+             f"'{poll['title']}' 종료, {len(pairs)}경기 생성{bye_str}")
         conn.commit()
 
     result = {"message": "투표가 종료되고 대진이 생성되었습니다.", "match_count": len(pairs)}
     if bye_player:
         result["bye_player"] = bye_player["nickname"]
     return result
+
+
+@app.post("/api/polls/{poll_id}/matches", status_code=201)
+async def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get_current_user)):
+    if req.result not in ("p1_win", "p2_win", "draw"):
+        raise HTTPException(status_code=400, detail="결과는 p1_win, p2_win, draw 중 하나여야 합니다.")
+    if req.player1_id == req.player2_id:
+        raise HTTPException(status_code=400, detail="백과 흑 선수는 달라야 합니다.")
+
+    with get_db() as conn:
+        poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not poll:
+            raise HTTPException(status_code=404, detail="투표를 찾을 수 없습니다.")
+        if poll["status"] == "finished":
+            raise HTTPException(status_code=400, detail="이미 완료된 투표에는 경기를 추가할 수 없습니다.")
+
+        _check_admin(conn, user["id"], poll["group_id"])
+
+        for pid in (req.player1_id, req.player2_id):
+            if not conn.execute(
+                "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+                (pid, poll["group_id"]),
+            ).fetchone():
+                raise HTTPException(status_code=400, detail="선택한 선수가 해당 그룹 멤버가 아닙니다.")
+
+        winner_id = (
+            req.player1_id if req.result == "p1_win" else
+            req.player2_id if req.result == "p2_win" else
+            None
+        )
+
+        nicks = {
+            row["id"]: row["nickname"]
+            for row in conn.execute(
+                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
+                (req.player1_id, req.player2_id),
+            ).fetchall()
+        }
+        result_str = {"p1_win": f"{nicks[req.player1_id]} 승", "p2_win": f"{nicks[req.player2_id]} 승", "draw": "무승부"}[req.result]
+
+        conn.execute(
+            """INSERT INTO matches
+               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'finished')""",
+            (poll["group_id"], poll_id, req.player1_id, req.player2_id, winner_id, user["id"]),
+        )
+        _log(conn, poll["group_id"], user["id"], "경기_추가",
+             f"'{poll['title']}': {nicks[req.player1_id]}(백) vs {nicks[req.player2_id]}(흑) — {result_str}")
+        conn.commit()
+
+    return {"message": "경기가 추가되었습니다."}
+
+
+@app.post("/api/polls/{poll_id}/reopen")
+async def reopen_poll(poll_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not poll:
+            raise HTTPException(status_code=404, detail="투표를 찾을 수 없습니다.")
+        if poll["status"] != "playing":
+            raise HTTPException(status_code=400, detail="대진이 생성된 투표만 다시 열 수 있습니다.")
+        _check_admin(conn, user["id"], poll["group_id"])
+        conn.execute("DELETE FROM matches WHERE poll_id = ?", (poll_id,))
+        conn.execute("UPDATE polls SET status = 'voting' WHERE id = ?", (poll_id,))
+        _log(conn, poll["group_id"], user["id"], "투표_재개", f"'{poll['title']}' 투표 다시하기")
+        conn.commit()
+    return {"message": "투표가 다시 시작되었습니다."}
 
 
 @app.delete("/api/polls/{poll_id}")
@@ -1111,6 +1297,7 @@ async def delete_poll(poll_id: int, user=Depends(get_current_user)):
         if poll["status"] != "voting":
             raise HTTPException(status_code=400, detail="진행 중이거나 완료된 투표는 삭제할 수 없습니다.")
         _check_admin(conn, user["id"], poll["group_id"])
+        _log(conn, poll["group_id"], user["id"], "투표_삭제", f"'{poll['title']}' 투표 삭제")
         conn.execute("DELETE FROM poll_votes WHERE poll_id = ?", (poll_id,))
         conn.execute("DELETE FROM polls WHERE id = ?", (poll_id,))
         conn.commit()
@@ -1243,6 +1430,16 @@ async def record_match_result(match_id: int, req: MatchResultRequest, user=Depen
         if req.winner_id is not None and req.winner_id not in (match["player1_id"], match["player2_id"]):
             raise HTTPException(status_code=400, detail="승자는 해당 매치의 선수여야 합니다.")
 
+        nicks = {
+            row["id"]: row["nickname"]
+            for row in conn.execute(
+                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
+                (match["player1_id"], match["player2_id"]),
+            ).fetchall()
+        }
+        p1n, p2n = nicks[match["player1_id"]], nicks[match["player2_id"]]
+        result_str = "무승부" if req.winner_id is None else f"{nicks[req.winner_id]} 승"
+
         conn.execute(
             "UPDATE matches SET winner_id = ?, status = 'finished' WHERE id = ?",
             (req.winner_id, match_id),
@@ -1260,6 +1457,9 @@ async def record_match_result(match_id: int, req: MatchResultRequest, user=Depen
                     (match["poll_id"],),
                 )
 
+        action = "경기_결과수정" if match["status"] == "finished" else "경기_결과기록"
+        _log(conn, match["group_id"], user["id"], action,
+             f"{p1n}(백) vs {p2n}(흑) — {result_str}")
         conn.commit()
 
     was_finished = match["status"] == "finished"
@@ -1290,6 +1490,119 @@ async def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(ge
         conn.commit()
 
     return {"message": "기보가 저장되었습니다."}
+
+
+@app.put("/api/matches/{match_id}/edit")
+async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_current_user)):
+    if req.result not in ("p1_win", "p2_win", "draw", "none"):
+        raise HTTPException(status_code=400, detail="올바르지 않은 결과값입니다.")
+    if req.player1_id == req.player2_id:
+        raise HTTPException(status_code=400, detail="백과 흑 선수는 달라야 합니다.")
+
+    with get_db() as conn:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="매치를 찾을 수 없습니다.")
+
+        _check_admin(conn, user["id"], match["group_id"])
+
+        for pid in (req.player1_id, req.player2_id):
+            if not conn.execute(
+                "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+                (pid, match["group_id"]),
+            ).fetchone():
+                raise HTTPException(status_code=400, detail="선택한 선수가 해당 그룹 멤버가 아닙니다.")
+
+        all_ids = {match["player1_id"], match["player2_id"], req.player1_id, req.player2_id}
+        nick_rows = conn.execute(
+            f"SELECT id, nickname FROM users WHERE id IN ({','.join('?'*len(all_ids))})",
+            list(all_ids),
+        ).fetchall()
+        nicks = {r["id"]: r["nickname"] for r in nick_rows}
+
+        def _result_label(p1_id, p2_id, w_id, st):
+            if st == "playing": return "미입력"
+            if w_id is None: return "무승부"
+            return f"{nicks.get(w_id, '?')} 승"
+
+        old_result = _result_label(match["player1_id"], match["player2_id"],
+                                   match["winner_id"], match["status"])
+        before = f"{nicks.get(match['player1_id'],'?')}(백) vs {nicks.get(match['player2_id'],'?')}(흑) {old_result}"
+
+        if req.result == "p1_win":
+            winner_id, status = req.player1_id, "finished"
+        elif req.result == "p2_win":
+            winner_id, status = req.player2_id, "finished"
+        elif req.result == "draw":
+            winner_id, status = None, "finished"
+        else:
+            winner_id, status = None, "playing"
+
+        after_result = _result_label(req.player1_id, req.player2_id, winner_id, status)
+        after = f"{nicks.get(req.player1_id,'?')}(백) vs {nicks.get(req.player2_id,'?')}(흑) {after_result}"
+
+        conn.execute(
+            "UPDATE matches SET player1_id=?, player2_id=?, winner_id=?, status=? WHERE id=?",
+            (req.player1_id, req.player2_id, winner_id, status, match_id),
+        )
+
+        if match["poll_id"]:
+            remaining = conn.execute(
+                "SELECT COUNT(*) FROM matches WHERE poll_id=? AND status='playing'",
+                (match["poll_id"],),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE polls SET status=? WHERE id=?",
+                ("finished" if remaining == 0 else "playing", match["poll_id"]),
+            )
+
+        _log(conn, match["group_id"], user["id"], "경기_수정",
+             f"수정 전: {before} / 수정 후: {after}")
+        conn.commit()
+
+    return {"message": "경기 정보가 수정되었습니다."}
+
+
+# ---------- 활동 로그 ----------
+
+VALID_LOG_ACTIONS = {
+    "투표_종료", "투표_재개", "투표_삭제",
+    "경기_결과기록", "경기_결과수정", "경기_수정", "경기_추가",
+    "멤버_강퇴", "역할_변경",
+}
+
+@app.get("/api/groups/{group_id}/activity-logs")
+async def get_activity_logs(
+    group_id: int,
+    action: str = None,
+    limit: int = 50,
+    user=Depends(get_current_user),
+):
+    if action and action not in VALID_LOG_ACTIONS:
+        raise HTTPException(status_code=400, detail="유효하지 않은 활동 유형입니다.")
+    with get_db() as conn:
+        _check_admin(conn, user["id"], group_id)
+        if action:
+            rows = conn.execute(
+                """SELECT al.id, al.action, al.detail, al.created_at,
+                          u.nickname AS actor
+                   FROM activity_logs al
+                   JOIN users u ON al.user_id = u.id
+                   WHERE al.group_id = ? AND al.action = ?
+                   ORDER BY al.created_at DESC LIMIT ?""",
+                (group_id, action, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT al.id, al.action, al.detail, al.created_at,
+                          u.nickname AS actor
+                   FROM activity_logs al
+                   JOIN users u ON al.user_id = u.id
+                   WHERE al.group_id = ?
+                   ORDER BY al.created_at DESC LIMIT ?""",
+                (group_id, limit),
+            ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ---------- 대시보드 ----------

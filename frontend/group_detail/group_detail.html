@@ -48,6 +48,13 @@
                     </div>
                 </section>
 
+                <!-- 활동 기록 버튼 (관리자 전용) -->
+                <div id="activity-log-btn-row" class="hidden">
+                    <button id="btn-open-activity-log" class="btn-activity-log">
+                        &#128221; 활동 기록
+                    </button>
+                </div>
+
                 <!-- 진행 중인 투표 / 대진표 (JS로 동적 렌더링) -->
                 <section id="poll-section" class="detail-card">
                     <p class="loading-msg" style="text-align:left">불러오는 중...</p>
@@ -75,6 +82,34 @@
 
         </div>
     </main>
+
+    <!-- ===== 활동 기록 모달 ===== -->
+    <div id="modal-activity-log" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="activity-log-modal-header">
+                <h3 class="modal-title" style="margin:0">활동 기록</h3>
+                <div class="activity-log-modal-actions">
+                    <select id="activity-log-filter" class="form-input activity-filter-select">
+                        <option value="">전체</option>
+                        <option value="투표_종료">투표 종료</option>
+                        <option value="투표_재개">투표 재개</option>
+                        <option value="투표_삭제">투표 삭제</option>
+                        <option value="경기_결과기록">경기 결과 기록</option>
+                        <option value="경기_결과수정">경기 결과 수정</option>
+                        <option value="경기_수정">경기 수정</option>
+                        <option value="경기_추가">경기 추가</option>
+                        <option value="멤버_강퇴">멤버 강퇴</option>
+                        <option value="역할_변경">역할 변경</option>
+                    </select>
+                    <button class="btn-cancel btn-modal-close" data-modal="modal-activity-log">&#10005;</button>
+                </div>
+            </div>
+            <div id="activity-log-list" class="activity-log-modal-body">
+                <p class="loading-msg">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
 
     <!-- ===== 순위표 모달 ===== -->
     <div id="modal-leaderboard" class="modal hidden" role="dialog" aria-modal="true">
@@ -290,6 +325,39 @@
             <div class="modal-buttons">
                 <button id="btn-confirm-create-announcement" class="btn-primary">등록</button>
                 <button class="btn-cancel" data-modal="modal-create-announcement">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 경기 수정 모달 ===== -->
+    <div id="modal-edit-match" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">경기 수정</h3>
+            <div class="edit-match-players">
+                <div class="form-group edit-player-group">
+                    <label>백 (White)</label>
+                    <select id="edit-player1" class="form-input"></select>
+                </div>
+                <button id="btn-swap-players" class="btn-swap" title="백/흑 교체">⇄</button>
+                <div class="form-group edit-player-group">
+                    <label>흑 (Black)</label>
+                    <select id="edit-player2" class="form-input"></select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>결과</label>
+                <div class="edit-result-options">
+                    <button class="btn-edit-result" data-result="p1_win" id="btn-edit-p1-win">백 승</button>
+                    <button class="btn-edit-result" data-result="draw">무승부</button>
+                    <button class="btn-edit-result" data-result="p2_win" id="btn-edit-p2-win">흑 승</button>
+                    <button class="btn-edit-result" data-result="none">미입력</button>
+                </div>
+            </div>
+            <p id="edit-match-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-edit-match" class="btn-primary">저장</button>
+                <button class="btn-cancel" data-modal="modal-edit-match">취소</button>
             </div>
         </div>
     </div>

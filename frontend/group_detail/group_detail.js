@@ -11,8 +11,8 @@ const token = localStorage.getItem('token');
 if (!token) window.location.href = '../login/login.html';
 
 const params  = new URLSearchParams(window.location.search);
-const groupId = params.get('group_id');
-if (!groupId) window.location.href = '../lobby/lobby.html';
+const groupId = parseInt(params.get('group_id'), 10);
+if (!groupId || isNaN(groupId)) window.location.href = '../lobby/lobby.html';
 
 // ===== 상태 =====
 
@@ -23,10 +23,15 @@ let historyPage      = 1;
 let openPollId       = null;
 let pollMatchCache   = {};
 let currentUserId    = null;
-let pendingMatchId   = null;
-let pendingP1Id      = null;
-let pendingP2Id      = null;
+let pendingMatchId    = null;
+let pendingP1Id       = null;
+let pendingP2Id       = null;
 let pendingPgnMatchId = null;
+let pendingEditMatchId = null;
+let pendingEditPollId  = null;
+let selectedEditResult = 'none';
+let editMatchMode      = 'edit';    // 'edit' | 'add'
+let editMatchContext   = 'history'; // 'history' | 'active'
 
 // 매치 PGN/선수 캐시 (matchId → {pgn_data, p1, p2})
 const matchDataCache = {};
@@ -576,7 +581,7 @@ function renderPollSection(pollDataArray) {
     const cardsHtml = pollDataArray.length
         ? pollDataArray.map(({ poll, votes, my_vote, matches }) =>
             poll.status === 'voting'  ? buildVotingCard(poll, votes, my_vote) :
-            poll.status === 'playing' ? buildPlayingCard(poll, matches) : ''
+            poll.status === 'playing' ? buildPlayingCard(poll, matches, votes) : ''
           ).join('')
         : '<p class="empty-msg-sm">현재 진행 중인 투표나 매치가 없습니다.</p>';
 
@@ -605,13 +610,28 @@ function renderPollSection(pollDataArray) {
         btn.addEventListener('click', () => deletePoll(parseInt(btn.dataset.pollId)));
     });
 
-    // 경기 결과 기록 / 수정
-    section.querySelectorAll('.btn-record-result, .btn-modify-result').forEach(btn => {
+    // 경기 종료 (결과 기록)
+    section.querySelectorAll('.btn-record-result').forEach(btn => {
         btn.addEventListener('click', () => openResultModal(
             parseInt(btn.dataset.matchId),
             parseInt(btn.dataset.p1Id), btn.dataset.p1Name,
             parseInt(btn.dataset.p2Id), btn.dataset.p2Name,
         ));
+    });
+
+    // 경기 수정 (관리자 전용)
+    section.querySelectorAll('.btn-edit-match').forEach(btn => {
+        btn.addEventListener('click', () => openEditMatchModal(parseInt(btn.dataset.matchId)));
+    });
+
+    // 경기 추가 (매치 관리 — 관리자 전용)
+    section.querySelectorAll('.btn-add-match-active').forEach(btn => {
+        btn.addEventListener('click', () => openAddMatchModal(parseInt(btn.dataset.pollId), 'active'));
+    });
+
+    // 투표 다시하기 (매치 관리 — 관리자 전용)
+    section.querySelectorAll('.btn-reopen-poll').forEach(btn => {
+        btn.addEventListener('click', () => reopenPoll(parseInt(btn.dataset.pollId)));
     });
 
     // PGN
@@ -662,9 +682,14 @@ function buildVotingCard(poll, votes, myVote) {
         </div>`;
 }
 
-function buildPlayingCard(poll, matches) {
+function buildPlayingCard(poll, matches, votes = []) {
     matches.forEach(m => {
-        matchDataCache[m.id] = { pgn_data: m.pgn_data || null, p1: m.player1_nickname, p2: m.player2_nickname };
+        matchDataCache[m.id] = {
+            pgn_data: m.pgn_data || null,
+            p1: m.player1_nickname, p2: m.player2_nickname,
+            p1Id: m.player1_id, p2Id: m.player2_id,
+            winnerId: m.winner_id ?? null, status: m.status,
+        };
     });
 
     const cards = matches.map(m => {
@@ -684,10 +709,7 @@ function buildPlayingCard(poll, matches) {
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
                         ${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}
                     </span>
-                    ${isAdmin() ? `<button class="btn-modify-result"
-                        data-match-id="${m.id}"
-                        data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
-                        data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">결과 수정</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">경기 수정</button>` : ''}
                     <div class="match-pgn-actions">
                         ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
                         ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
@@ -701,15 +723,25 @@ function buildPlayingCard(poll, matches) {
                     <span class="vs-label">vs</span>
                     <span class="match-player"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
                 </div>
-                ${isAdmin() ? `<button class="btn-record-result"
+                ${isAdmin() ? `
+                    <button class="btn-record-result"
                         data-match-id="${m.id}"
                         data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
-                        data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">경기 종료</button>` : ''}
+                        data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">경기 종료</button>
+                    <button class="btn-edit-match" data-match-id="${m.id}">경기 수정</button>
+                ` : ''}
             </div>`;
     }).join('');
 
     const allDone  = matches.every(m => m.status === 'finished');
     const titleStr = poll.title ? escapeHtml(poll.title) : '대진표';
+
+    const matchPlayerIds = new Set(matches.flatMap(m => [m.player1_id, m.player2_id]));
+    const byeVoter = votes.find(v => !matchPlayerIds.has(v.user_id));
+    const byeNotice = byeVoter
+        ? `<p class="bye-notice">홀수 인원으로 인해 <strong>${escapeHtml(byeVoter.nickname)}</strong>님은 이번 라운드에서 제외됩니다.</p>`
+        : '';
+
     return `
         <div class="poll-card">
             <div class="card-head-row">
@@ -717,7 +749,12 @@ function buildPlayingCard(poll, matches) {
                     <h3 class="poll-card-title">${titleStr}</h3>
                     <span class="status-badge playing">${allDone ? '완료' : '진행 중'}</span>
                 </div>
+                <div class="head-buttons">
+                    ${isAdmin() ? `<button class="btn-add-match-active" data-poll-id="${poll.id}">+ 경기 추가</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-reopen-poll" data-poll-id="${poll.id}">투표 다시하기</button>` : ''}
+                </div>
             </div>
+            ${byeNotice}
             <div class="match-list-area">${cards}</div>
         </div>`;
 }
@@ -827,7 +864,12 @@ async function fetchPollMatches(pollId) {
 
     pollMatchCache[pollId] = result.data;
     result.data.forEach(m => {
-        matchDataCache[m.id] = { pgn_data: m.pgn_data || null, p1: m.player1_nickname, p2: m.player2_nickname };
+        matchDataCache[m.id] = {
+            pgn_data: m.pgn_data || null,
+            p1: m.player1_nickname, p2: m.player2_nickname,
+            p1Id: m.player1_id, p2Id: m.player2_id,
+            winnerId: m.winner_id ?? null, status: 'finished',
+        };
     });
     renderPollMatches(pollId);
 }
@@ -836,46 +878,45 @@ function renderPollMatches(pollId) {
     const body    = document.getElementById(`accordion-body-${pollId}`);
     const matches = pollMatchCache[pollId];
 
+    const addBtnHtml = isAdmin()
+        ? `<div class="accordion-add-row">
+               <button class="btn-add-match-to-poll" data-poll-id="${pollId}">+ 경기 추가</button>
+           </div>`
+        : '';
+
     if (!matches?.length) {
-        body.innerHTML = '<p class="empty-msg-sm">경기 기록이 없습니다.</p>';
-        return;
+        body.innerHTML = addBtnHtml + '<p class="empty-msg-sm">경기 기록이 없습니다.</p>';
+    } else {
+        body.innerHTML = addBtnHtml + matches.map(m => {
+            const isDraw  = !m.winner_id;
+            const p1Win   = m.winner_id === m.player1_id;
+            const p2Win   = m.winner_id === m.player2_id;
+            const hasPgn  = !!m.pgn_data;
+            const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
+
+            return `
+                <div class="accordion-match-item">
+                    <span class="match-players">
+                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                        <span class="match-vs-sm">vs</span>
+                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                    </span>
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">수정</button>` : ''}
+                    <span class="match-pgn-actions">
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                    </span>
+                </div>`;
+        }).join('');
     }
 
-    body.innerHTML = matches.map(m => {
-        const isDraw  = !m.winner_id;
-        const p1Win   = m.winner_id === m.player1_id;
-        const p2Win   = m.winner_id === m.player2_id;
-        const hasPgn  = !!m.pgn_data;
-        const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
-
-        return `
-            <div class="accordion-match-item">
-                <span class="match-players">
-                    <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
-                    <span class="match-vs-sm">vs</span>
-                    <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
-                </span>
-                <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
-                ${isAdmin() ? `<button class="btn-modify-result acc-modify"
-                    data-match-id="${m.id}"
-                    data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
-                    data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">
-                    수정
-                </button>` : ''}
-                <span class="match-pgn-actions">
-                    ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
-                    ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
-                </span>
-            </div>`;
-    }).join('');
-
     if (isAdmin()) {
-        body.querySelectorAll('.btn-modify-result').forEach(btn => {
-            btn.addEventListener('click', () => openResultModal(
-                parseInt(btn.dataset.matchId),
-                parseInt(btn.dataset.p1Id), btn.dataset.p1Name,
-                parseInt(btn.dataset.p2Id), btn.dataset.p2Name,
-            ));
+        body.querySelector('.btn-add-match-to-poll')?.addEventListener('click', () => {
+            openAddMatchModal(pollId);
+        });
+        body.querySelectorAll('.btn-edit-match').forEach(btn => {
+            btn.addEventListener('click', () => openEditMatchModal(parseInt(btn.dataset.matchId), pollId));
         });
     }
 
@@ -925,6 +966,16 @@ async function closePoll(pollId, voteCount) {
     const result = await apiFetch(`/api/polls/${pollId}/close`, { method: 'POST' });
     if (result?.ok) {
         await refreshPage();
+    } else {
+        alert(result?.data?.detail || '오류가 발생했습니다.');
+    }
+}
+
+async function reopenPoll(pollId) {
+    if (!confirm('대진표가 삭제되고 투표 단계로 돌아갑니다. 기존 참여자는 유지됩니다. 계속하시겠습니까?')) return;
+    const result = await apiFetch(`/api/polls/${pollId}/reopen`, { method: 'POST' });
+    if (result?.ok) {
+        await refreshPoll();
     } else {
         alert(result?.data?.detail || '오류가 발생했습니다.');
     }
@@ -1160,6 +1211,161 @@ document.addEventListener('keydown', e => {
     if (e.key === 'End')        pgnGoTo(pgnPositions.length - 1);
 });
 
+// ===== 경기 수정 모달 =====
+
+function openEditMatchModal(matchId, pollId = null) {
+    const d = matchDataCache[matchId];
+    if (!d) return;
+
+    editMatchMode      = 'edit';
+    pendingEditPollId  = pollId;
+    pendingEditMatchId = matchId;
+
+    const options = currentMembers.map(m =>
+        `<option value="${m.id}">${escapeHtml(m.nickname)}</option>`
+    ).join('');
+
+    const p1Select = document.getElementById('edit-player1');
+    const p2Select = document.getElementById('edit-player2');
+    p1Select.innerHTML = options;
+    p2Select.innerHTML = options;
+    p1Select.value = String(d.p1Id);
+    p2Select.value = String(d.p2Id);
+
+    if (d.status === 'finished') {
+        if (d.winnerId === d.p1Id)      selectedEditResult = 'p1_win';
+        else if (d.winnerId === d.p2Id) selectedEditResult = 'p2_win';
+        else                             selectedEditResult = 'draw';
+    } else {
+        selectedEditResult = 'none';
+    }
+
+    document.querySelector('#modal-edit-match .modal-title').textContent = '경기 수정';
+    updateEditResultButtons();
+    document.getElementById('edit-match-error').textContent = '';
+    document.getElementById('modal-edit-match').classList.remove('hidden');
+}
+
+function openAddMatchModal(pollId, context = 'history') {
+    editMatchMode     = 'add';
+    editMatchContext  = context;
+    pendingEditPollId = pollId;
+    pendingEditMatchId = null;
+
+    const options = currentMembers.map(m =>
+        `<option value="${m.id}">${escapeHtml(m.nickname)}</option>`
+    ).join('');
+
+    const p1Select = document.getElementById('edit-player1');
+    const p2Select = document.getElementById('edit-player2');
+    p1Select.innerHTML = options;
+    p2Select.innerHTML = options;
+    if (currentMembers.length >= 2) {
+        p1Select.value = String(currentMembers[0].id);
+        p2Select.value = String(currentMembers[1].id);
+    }
+
+    selectedEditResult = 'p1_win';
+    document.querySelector('#modal-edit-match .modal-title').textContent = '경기 추가';
+    updateEditResultButtons();
+    document.getElementById('edit-match-error').textContent = '';
+    document.getElementById('modal-edit-match').classList.remove('hidden');
+}
+
+function updateEditResultButtons() {
+    const p1Sel  = document.getElementById('edit-player1');
+    const p2Sel  = document.getElementById('edit-player2');
+    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || '백';
+    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || '흑';
+
+    document.getElementById('btn-edit-p1-win').textContent = `${p1Name} 승 (백)`;
+    document.getElementById('btn-edit-p2-win').textContent = `${p2Name} 승 (흑)`;
+
+    document.querySelectorAll('.btn-edit-result').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.result === selectedEditResult);
+        if (btn.dataset.result === 'none') {
+            btn.classList.toggle('hidden', editMatchMode === 'add');
+        }
+    });
+}
+
+document.getElementById('btn-swap-players').addEventListener('click', () => {
+    const p1Select = document.getElementById('edit-player1');
+    const p2Select = document.getElementById('edit-player2');
+    const tmp = p1Select.value;
+    p1Select.value = p2Select.value;
+    p2Select.value = tmp;
+
+    if (selectedEditResult === 'p1_win')      selectedEditResult = 'p2_win';
+    else if (selectedEditResult === 'p2_win') selectedEditResult = 'p1_win';
+
+    updateEditResultButtons();
+});
+
+document.getElementById('edit-player1').addEventListener('change', updateEditResultButtons);
+document.getElementById('edit-player2').addEventListener('change', updateEditResultButtons);
+
+document.querySelectorAll('.btn-edit-result').forEach(btn => {
+    btn.addEventListener('click', () => {
+        selectedEditResult = btn.dataset.result;
+        updateEditResultButtons();
+    });
+});
+
+document.getElementById('btn-confirm-edit-match').addEventListener('click', async () => {
+    const p1Id   = parseInt(document.getElementById('edit-player1').value);
+    const p2Id   = parseInt(document.getElementById('edit-player2').value);
+    const errorEl = document.getElementById('edit-match-error');
+    errorEl.textContent = '';
+
+    if (p1Id === p2Id) {
+        errorEl.textContent = '백과 흑 선수는 달라야 합니다.';
+        return;
+    }
+    if (editMatchMode === 'add' && selectedEditResult === 'none') {
+        errorEl.textContent = '결과를 선택해주세요.';
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-edit-match');
+    btn.disabled = true;
+    btn.textContent = '저장 중...';
+
+    try {
+        let apiResult;
+        if (editMatchMode === 'add') {
+            apiResult = await apiFetch(`/api/polls/${pendingEditPollId}/matches`, {
+                method: 'POST',
+                body: JSON.stringify({ player1_id: p1Id, player2_id: p2Id, result: selectedEditResult }),
+            });
+        } else {
+            apiResult = await apiFetch(`/api/matches/${pendingEditMatchId}/edit`, {
+                method: 'PUT',
+                body: JSON.stringify({ player1_id: p1Id, player2_id: p2Id, result: selectedEditResult }),
+            });
+        }
+
+        if (apiResult?.ok) {
+            document.getElementById('modal-edit-match').classList.add('hidden');
+            if (pendingEditPollId !== null) {
+                if (editMatchContext === 'active') {
+                    await refreshPoll();
+                } else {
+                    pollMatchCache[pendingEditPollId] = null;
+                    await fetchPollMatches(pendingEditPollId);
+                }
+            } else {
+                await refreshPage();
+            }
+        } else {
+            errorEl.textContent = apiResult?.data?.detail || '저장에 실패했습니다.';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '저장';
+    }
+});
+
 // ===== 데이터 로드 =====
 
 async function refreshPoll() {
@@ -1206,7 +1412,72 @@ async function refreshPage() {
     if (historyRes?.ok) renderHistoryAccordion(historyRes.data);
 
     await loadLatestAnnouncement();
+
+    document.getElementById('activity-log-btn-row')
+        .classList.toggle('hidden', !isAdmin());
 }
+
+// ===== 활동 기록 =====
+
+const ACTION_LABELS = {
+    '투표_종료':     '투표 종료',
+    '투표_재개':     '투표 재개',
+    '투표_삭제':     '투표 삭제',
+    '경기_결과기록': '경기 결과 기록',
+    '경기_결과수정': '경기 결과 수정',
+    '경기_수정':     '경기 수정',
+    '경기_추가':     '경기 추가',
+    '멤버_강퇴':     '멤버 강퇴',
+    '역할_변경':     '역할 변경',
+};
+
+const ACTION_COLORS = {
+    '투표_종료':     '#5b8dd9',
+    '투표_재개':     '#7b9ed4',
+    '투표_삭제':     '#e07070',
+    '경기_결과기록': '#4caf87',
+    '경기_결과수정': '#f0a04b',
+    '경기_수정':     '#f0a04b',
+    '경기_추가':     '#4caf87',
+    '멤버_강퇴':     '#e07070',
+    '역할_변경':     '#9b7ed4',
+};
+
+async function loadActivityLogs() {
+    const filter = document.getElementById('activity-log-filter')?.value || '';
+    const url = `/api/groups/${groupId}/activity-logs${filter ? `?action=${encodeURIComponent(filter)}` : ''}`;
+    const result = await apiFetch(url);
+    if (result?.ok) renderActivityLogs(result.data);
+}
+
+function renderActivityLogs(logs) {
+    const el = document.getElementById('activity-log-list');
+    if (!logs.length) {
+        el.innerHTML = '<p class="empty-msg-sm">기록된 활동이 없습니다.</p>';
+        return;
+    }
+    el.innerHTML = logs.map(log => {
+        const label = ACTION_LABELS[log.action] || log.action;
+        const color = ACTION_COLORS[log.action] || 'var(--color-primary)';
+        const time  = log.created_at.replace('T', ' ').slice(0, 16);
+        return `
+            <div class="activity-log-item">
+                <span class="activity-badge" style="background:${color}">${label}</span>
+                <div class="activity-content">
+                    <span class="activity-actor">${escapeHtml(log.actor)}</span>
+                    <span class="activity-detail">${escapeHtml(log.detail)}</span>
+                </div>
+                <span class="activity-time">${time}</span>
+            </div>`;
+    }).join('');
+}
+
+document.getElementById('activity-log-filter').addEventListener('change', loadActivityLogs);
+
+document.getElementById('btn-open-activity-log').addEventListener('click', async () => {
+    document.getElementById('modal-activity-log').classList.remove('hidden');
+    await loadActivityLogs();
+});
 
 // ===== 모달 닫기 =====
 
