@@ -597,13 +597,13 @@ function renderPollSection(pollDataArray) {
 
     // 참여/취소 (투표별)
     section.querySelectorAll('.btn-vote-toggle').forEach(btn => {
-        btn.addEventListener('click', () => toggleVote(parseInt(btn.dataset.pollId)));
+        btn.addEventListener('click', () => toggleVote(parseInt(btn.dataset.pollId), btn));
     });
 
     // 관리자: 투표 종료 / 삭제
     section.querySelectorAll('.btn-close-poll').forEach(btn => {
         btn.addEventListener('click', () =>
-            closePoll(parseInt(btn.dataset.pollId), parseInt(btn.dataset.voteCount))
+            closePoll(parseInt(btn.dataset.pollId), parseInt(btn.dataset.voteCount), btn)
         );
     });
     section.querySelectorAll('.btn-delete-poll').forEach(btn => {
@@ -631,7 +631,7 @@ function renderPollSection(pollDataArray) {
 
     // 투표 다시하기 (매치 관리 — 관리자 전용)
     section.querySelectorAll('.btn-reopen-poll').forEach(btn => {
-        btn.addEventListener('click', () => reopenPoll(parseInt(btn.dataset.pollId)));
+        btn.addEventListener('click', () => reopenPoll(parseInt(btn.dataset.pollId), btn));
     });
 
     // PGN
@@ -947,36 +947,42 @@ async function deletePoll(pollId) {
     }
 }
 
-async function toggleVote(pollId) {
+async function toggleVote(pollId, btn) {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
     const result = await apiFetch(`/api/polls/${pollId}/vote`, { method: 'POST' });
     if (result?.ok) {
         await refreshPoll();
     } else {
+        if (btn) { btn.disabled = false; btn.textContent = btn.classList.contains('voted') ? '참여 취소' : '참여'; }
         alert(result?.data?.detail || '오류가 발생했습니다.');
     }
 }
 
-async function closePoll(pollId, voteCount) {
+async function closePoll(pollId, voteCount, btn) {
     if (voteCount < 2) {
         alert('매치 생성에는 최소 2명의 참여자가 필요합니다.');
         return;
     }
     if (!confirm(`${voteCount}명의 참여자로 대진을 생성하고 투표를 종료하시겠습니까?`)) return;
 
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
     const result = await apiFetch(`/api/polls/${pollId}/close`, { method: 'POST' });
     if (result?.ok) {
         await refreshPage();
     } else {
+        if (btn) { btn.disabled = false; btn.textContent = '투표 종료'; }
         alert(result?.data?.detail || '오류가 발생했습니다.');
     }
 }
 
-async function reopenPoll(pollId) {
+async function reopenPoll(pollId, btn) {
     if (!confirm('대진표가 삭제되고 투표 단계로 돌아갑니다. 기존 참여자는 유지됩니다. 계속하시겠습니까?')) return;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
     const result = await apiFetch(`/api/polls/${pollId}/reopen`, { method: 'POST' });
     if (result?.ok) {
         await refreshPoll();
     } else {
+        if (btn) { btn.disabled = false; btn.textContent = '투표 다시하기'; }
         alert(result?.data?.detail || '오류가 발생했습니다.');
     }
 }
@@ -1528,4 +1534,5 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ===== 실행 =====
 
-refreshPage();
+const _pageLoader = document.getElementById('page-loader');
+refreshPage().finally(() => _pageLoader.classList.add('hidden'));
