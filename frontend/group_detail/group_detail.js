@@ -1535,4 +1535,5 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 // ===== 실행 =====
 
 const _pageLoader = document.getElementById('page-loader');
-refreshPage().finally(() => _pageLoader.classList.add('hidden'));
+const _minDisplay = new Promise(r => setTimeout(r, 400));
+Promise.all([refreshPage(), _minDisplay]).finally(() => _pageLoader.classList.add('hidden'));
