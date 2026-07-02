@@ -12,3 +12,7 @@ services:
         value: "3.11.0"
       - key: DB_PATH
         value: chess_club.db
+      - key: TURSO_DATABASE_URL
+        value: libsql://chessclub-hongseongwoo-ajou.aws-ap-northeast-1.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false

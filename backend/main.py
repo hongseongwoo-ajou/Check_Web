@@ -17,6 +17,7 @@ import urllib.request
 import json
 import os
 import re
+import contextlib
 
 _origins_env = os.environ.get("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = _origins_env.split(",") if _origins_env else ["*"]
@@ -31,6 +32,11 @@ app = FastAPI(title="체스 동아리 API", version="0.2.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -38,7 +44,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = os.environ.get("DB_PATH", "chess_club.db")
+DB_PATH      = os.environ.get("DB_PATH", "chess_club.db")
+TURSO_URL    = os.environ.get("TURSO_DATABASE_URL", "")
+TURSO_TOKEN  = os.environ.get("TURSO_AUTH_TOKEN", "")
 
 KST = timezone(timedelta(hours=9))
 
@@ -50,10 +58,25 @@ def now_kst() -> datetime:
 CHESS_COM_USER_AGENT = "ChessClubApp/1.0 (chess club rating tracker)"
 
 
+@contextlib.contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    if TURSO_URL and TURSO_TOKEN:
+        import libsql_experimental as libsql
+        conn = libsql.connect(DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_TOKEN)
+        conn.sync()
+    else:
+        conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+        if TURSO_URL and TURSO_TOKEN:
+            conn.sync()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
