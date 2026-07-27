@@ -66,6 +66,20 @@
                     <p class="loading-msg" style="text-align:left">불러오는 중...</p>
                 </section>
 
+                <!-- 최근 경기 내역 (공식 + 친선) -->
+                <section class="detail-card">
+                    <div class="card-head-row">
+                        <h2 class="card-heading">최근 경기 내역</h2>
+                        <div class="head-buttons">
+                            <button id="btn-open-folders" class="btn-record-friendly">친선 경기 폴더</button>
+                            <button id="btn-record-friendly" class="btn-record-friendly">+ 친선 경기 직접 기록</button>
+                        </div>
+                    </div>
+                    <div id="recent-matches">
+                        <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                    </div>
+                </section>
+
                 <!-- 지난 경기 결과 -->
                 <section class="detail-card">
                     <h2 class="card-heading">지난 경기 결과</h2>
@@ -105,6 +119,12 @@
                         <option value="경기_결과수정">경기 결과 수정</option>
                         <option value="경기_수정">경기 수정</option>
                         <option value="경기_추가">경기 추가</option>
+                        <option value="친선경기_기록">친선 경기 기록</option>
+                        <option value="폴더_생성">폴더 생성</option>
+                        <option value="폴더_수정">폴더 수정</option>
+                        <option value="폴더_삭제">폴더 삭제</option>
+                        <option value="친선경기_폴더담기">친선 경기 폴더 담기</option>
+                        <option value="친선경기_폴더빼기">친선 경기 폴더 빼기</option>
                         <option value="멤버_강퇴">멤버 강퇴</option>
                         <option value="역할_변경">역할 변경</option>
                     </select>
@@ -174,6 +194,20 @@
                 <label for="input-poll-title">투표명</label>
                 <input type="text" id="input-poll-title" class="form-input"
                        placeholder="예: 6월 5주차 정기전" maxlength="50">
+            </div>
+            <div class="form-group">
+                <label>경기 유형</label>
+                <div class="match-type-toggle">
+                    <label class="match-type-option">
+                        <input type="radio" name="poll-match-type" value="official" checked>
+                        <span>공식 경기</span>
+                    </label>
+                    <label class="match-type-option">
+                        <input type="radio" name="poll-match-type" value="friendly">
+                        <span>친선 경기</span>
+                    </label>
+                </div>
+                <p class="match-type-desc">공식 경기만 순위표 승점에 반영됩니다.</p>
             </div>
             <p id="create-poll-error" class="form-error"></p>
             <div class="modal-buttons">
@@ -364,6 +398,85 @@
             <div class="modal-buttons">
                 <button id="btn-confirm-edit-match" class="btn-primary">저장</button>
                 <button class="btn-cancel" data-modal="modal-edit-match">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 친선 경기 폴더 모달 ===== -->
+    <div id="modal-friendly-folders" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="lb-modal-header">
+                <h3 class="lb-modal-title">친선 경기 폴더</h3>
+                <div class="lb-modal-actions">
+                    <button id="btn-folder-manage-toggle" class="btn-settings-toggle hidden">⚙ 폴더 관리</button>
+                    <button class="btn-modal-close btn-cancel" data-modal="modal-friendly-folders">&#10005;</button>
+                </div>
+            </div>
+
+            <!-- 폴더 관리 패널 (임원 이상) -->
+            <div id="folder-manage-panel" class="folder-manage-panel hidden">
+                <div class="folder-new-row">
+                    <input type="text" id="input-new-folder-name" class="form-input"
+                           placeholder="새 폴더 이름" maxlength="50">
+                    <button id="btn-create-folder" class="btn-primary">폴더 생성</button>
+                </div>
+                <p id="folder-manage-error" class="form-error"></p>
+
+                <div class="folder-assign-row">
+                    <select id="select-assign-folder" class="form-input">
+                        <option value="">폴더 선택...</option>
+                    </select>
+                    <button id="btn-assign-to-folder" class="btn-folder-action">선택 항목 담기</button>
+                    <button id="btn-remove-from-folder" class="btn-folder-action btn-folder-remove">선택 항목 빼기</button>
+                </div>
+
+                <div id="folder-manage-match-list" class="folder-manage-match-list">
+                    <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                </div>
+            </div>
+
+            <!-- 폴더 뷰 (아코디언) -->
+            <div id="folder-view-content">
+                <p class="loading-msg" style="text-align:center">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 친선 경기 직접 기록 모달 ===== -->
+    <div id="modal-friendly-match" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 class="modal-title">친선 경기 직접 기록</h3>
+            <p class="match-type-desc" style="margin-top:-0.5rem">투표 없이 즉시 기록되며, 순위표 승점에는 반영되지 않습니다.</p>
+            <div class="edit-match-players">
+                <div class="form-group edit-player-group">
+                    <label>백 (White)</label>
+                    <select id="friendly-player1" class="form-input"></select>
+                </div>
+                <button id="btn-swap-friendly-players" class="btn-swap" title="백/흑 교체">⇄</button>
+                <div class="form-group edit-player-group">
+                    <label>흑 (Black)</label>
+                    <select id="friendly-player2" class="form-input"></select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>결과</label>
+                <div class="edit-result-options">
+                    <button class="btn-friendly-result" data-result="p1_win" id="btn-friendly-p1-win">백 승</button>
+                    <button class="btn-friendly-result" data-result="draw">무승부</button>
+                    <button class="btn-friendly-result" data-result="p2_win" id="btn-friendly-p2-win">흑 승</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="input-friendly-note">메모 (선택)</label>
+                <textarea id="input-friendly-note" class="form-input" rows="2" maxlength="500"
+                          placeholder="예: 점심시간 번개전"></textarea>
+            </div>
+            <p id="friendly-match-error" class="form-error"></p>
+            <div class="modal-buttons">
+                <button id="btn-confirm-friendly-match" class="btn-primary">기록</button>
+                <button class="btn-cancel" data-modal="modal-friendly-match">취소</button>
             </div>
         </div>
     </div>

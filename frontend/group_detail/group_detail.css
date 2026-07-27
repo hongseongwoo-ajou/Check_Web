@@ -355,6 +355,256 @@
 .status-badge.voting  { background: rgba(100, 180, 255, 0.12); color: #7ab8ff; }
 .status-badge.playing { background: rgba(111, 207, 151, 0.12); color: #6fcf97; }
 
+/* ===== 공식/친선 배지 ===== */
+.official-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 99px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.official-badge.official { background: rgba(226, 185, 111, 0.15); color: var(--color-primary); }
+.official-badge.friendly { background: rgba(155, 126, 212, 0.15); color: #b39ee8; }
+
+/* ===== 경기 유형 선택 (투표 생성 모달) ===== */
+.match-type-toggle {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.match-type-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.match-type-option input { accent-color: var(--color-primary); }
+
+.match-type-option:has(input:checked) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(226, 185, 111, 0.08);
+    font-weight: 600;
+}
+
+.match-type-desc {
+    font-size: 0.76rem;
+    color: var(--color-text-muted);
+    margin-top: 0.4rem;
+}
+
+/* ===== 친선 경기 기록 버튼 ===== */
+.btn-record-friendly {
+    padding: 0.4rem 0.85rem;
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s;
+}
+
+.btn-record-friendly:hover { background: rgba(226, 185, 111, 0.1); }
+
+/* ===== 최근 경기 내역 ===== */
+.recent-match-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.recent-match-item:last-child { border-bottom: none; }
+
+.recent-match-row {
+    display: grid;
+    grid-template-columns: 3.4rem 1fr 4.6rem 10rem 3.4rem;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.recent-match-row .match-players {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-match-row .match-result {
+    text-align: right;
+}
+
+.recent-match-row .match-pgn-actions {
+    justify-content: flex-end;
+}
+
+.recent-match-date {
+    text-align: right;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.recent-match-note {
+    margin: 0.3rem 0 0;
+    padding-left: 0.1rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.official-badge.unfoldered {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-muted);
+}
+
+/* ===== 친선 경기 폴더 모달 ===== */
+.folder-manage-panel {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.folder-new-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.folder-new-row .form-input { flex: 1; }
+
+.folder-assign-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.folder-assign-row .form-input {
+    flex: 1;
+    min-width: 8rem;
+}
+
+.btn-folder-action {
+    padding: 0.5rem 0.85rem;
+    background: var(--color-primary);
+    color: #1a1a2e;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.btn-folder-action:hover { opacity: 0.85; }
+
+.btn-folder-remove {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.btn-folder-remove:hover {
+    border-color: #e07070;
+    color: #e07070;
+}
+
+.folder-manage-match-list {
+    max-height: 14rem;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.25rem 0.6rem;
+}
+
+.folder-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.folder-manage-row:last-child { border-bottom: none; }
+
+.folder-manage-row input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-primary);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.folder-head-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.folder-head-row .accordion-header {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+}
+
+.folder-admin-actions {
+    display: flex;
+    gap: 0.25rem;
+    padding-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+.btn-folder-icon {
+    padding: 0.25rem 0.4rem;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.btn-folder-icon:hover {
+    color: var(--color-primary);
+    background: rgba(226, 185, 111, 0.1);
+}
+
+.btn-delete-folder:hover {
+    color: #e07070;
+    background: rgba(224, 112, 112, 0.1);
+}
+
+.folder-rename-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.75rem;
+}
+
+.folder-rename-row .form-input {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+}
+
+.folder-match-item {
+    flex-wrap: wrap;
+}
+
 /* ===== 헤드 행 (제목 + 버튼) ===== */
 .head-left {
     display: flex;
@@ -653,7 +903,8 @@
     margin-top: 0.4rem;
 }
 
-.btn-edit-result {
+.btn-edit-result,
+.btn-friendly-result {
     flex: 1;
     min-width: 5rem;
     padding: 0.45rem 0.5rem;
@@ -667,12 +918,14 @@
     text-align: center;
 }
 
-.btn-edit-result:hover {
+.btn-edit-result:hover,
+.btn-friendly-result:hover {
     border-color: var(--color-primary);
     color: var(--color-text);
 }
 
-.btn-edit-result.selected {
+.btn-edit-result.selected,
+.btn-friendly-result.selected {
     background: rgba(226, 185, 111, 0.15);
     border-color: var(--color-primary);
     color: var(--color-primary);
@@ -815,15 +1068,29 @@
 }
 
 .accordion-match-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 4.6rem auto auto;
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    flex-wrap: wrap;
 }
 
 .accordion-match-item:last-child { border-bottom: none; }
+
+.accordion-match-item .match-players {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.accordion-match-item .match-result { text-align: right; }
+.accordion-match-item .match-pgn-actions { justify-content: flex-end; }
+
+.accordion-match-item.folder-match-item {
+    grid-template-columns: 1fr 4.6rem auto;
+}
 
 .match-vs-sm {
     color: var(--color-text-muted);
@@ -1943,6 +2210,43 @@
 
     .match-pgn-actions {
         flex-wrap: wrap;
+    }
+
+    /* 최근 경기 내역: 좁은 화면에서는 2줄로 배치 */
+    .recent-match-row {
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+            "badge players date"
+            "result result actions";
+        row-gap: 0.4rem;
+    }
+
+    .recent-match-row .official-badge  { grid-area: badge; }
+    .recent-match-row .match-players   { grid-area: players; white-space: normal; }
+    .recent-match-row .recent-match-date { grid-area: date; }
+    .recent-match-row .match-result    { grid-area: result; text-align: left; }
+    .recent-match-row .match-pgn-actions {
+        grid-area: actions;
+        flex-wrap: wrap;
+    }
+
+    /* 지난 경기 결과 아코디언: 좁은 화면에서는 선수 정보를 한 줄 통째로, 나머지는 아래 줄에 배치 */
+    .accordion-match-item {
+        grid-template-columns: auto auto auto;
+        column-gap: 0.5rem;
+        row-gap: 0.4rem;
+    }
+
+    .accordion-match-item .match-players {
+        grid-column: 1 / -1;
+        white-space: normal;
+    }
+
+    .accordion-match-item .match-result { text-align: left; }
+
+    .accordion-match-item .match-pgn-actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
     }
 
     .btn-record-result {

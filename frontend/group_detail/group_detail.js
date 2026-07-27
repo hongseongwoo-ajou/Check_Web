@@ -33,6 +33,14 @@ let selectedEditResult = 'none';
 let editMatchMode      = 'edit';    // 'edit' | 'add'
 let editMatchContext   = 'history'; // 'history' | 'active'
 
+// 친선 경기 폴더 상태
+let allFolders           = [];
+let openFolderId         = null;
+let folderMatchCache     = {};
+let manageMatches        = [];
+let selectedManageIds    = new Set();
+let renamingFolderId     = null;
+
 // 매치 PGN/선수 캐시 (matchId → {pgn_data, p1, p2})
 const matchDataCache = {};
 
@@ -86,6 +94,12 @@ function formatDate(dateStr) {
 }
 
 const isAdmin = () => currentRole === '방장' || currentRole === '임원';
+
+function matchTypeBadge(isOfficial) {
+    return isOfficial
+        ? '<span class="official-badge official">공식</span>'
+        : '<span class="official-badge friendly">친선</span>';
+}
 
 // ===== PGN 유효성 검사 (chess.js) =====
 
@@ -538,8 +552,9 @@ function renderLeaderboard(standings, settings) {
 // ===== 투표 생성 모달 =====
 
 document.getElementById('btn-confirm-create-poll').addEventListener('click', async () => {
-    const title   = document.getElementById('input-poll-title').value.trim();
-    const errorEl = document.getElementById('create-poll-error');
+    const title      = document.getElementById('input-poll-title').value.trim();
+    const isOfficial = document.querySelector('input[name="poll-match-type"]:checked').value === 'official';
+    const errorEl    = document.getElementById('create-poll-error');
     errorEl.textContent = '';
 
     const btn = document.getElementById('btn-confirm-create-poll');
@@ -549,7 +564,7 @@ document.getElementById('btn-confirm-create-poll').addEventListener('click', asy
     try {
         const result = await apiFetch(`/api/groups/${groupId}/polls`, {
             method: 'POST',
-            body: JSON.stringify({ title }),
+            body: JSON.stringify({ title, is_official: isOfficial }),
         });
         if (result?.ok) {
             document.getElementById('modal-create-poll').classList.add('hidden');
@@ -591,6 +606,7 @@ function renderPollSection(pollDataArray) {
     section.querySelector('.btn-create-poll')?.addEventListener('click', () => {
         document.getElementById('input-poll-title').value = '';
         document.getElementById('create-poll-error').textContent = '';
+        document.querySelector('input[name="poll-match-type"][value="official"]').checked = true;
         document.getElementById('modal-create-poll').classList.remove('hidden');
         setTimeout(() => document.getElementById('input-poll-title').focus(), 50);
     });
@@ -669,6 +685,7 @@ function buildVotingCard(poll, votes, myVote) {
                 <div class="head-left">
                     <h3 class="poll-card-title">${titleStr}</h3>
                     <span class="status-badge voting">투표 중</span>
+                    ${matchTypeBadge(poll.is_official)}
                 </div>
                 <div class="head-buttons">
                     <button class="btn-vote${myVote ? ' voted' : ''} btn-vote-toggle" data-poll-id="${poll.id}">
@@ -748,6 +765,7 @@ function buildPlayingCard(poll, matches, votes = []) {
                 <div class="head-left">
                     <h3 class="poll-card-title">${titleStr}</h3>
                     <span class="status-badge playing">${allDone ? '완료' : '진행 중'}</span>
+                    ${matchTypeBadge(poll.is_official)}
                 </div>
                 <div class="head-buttons">
                     ${isAdmin() ? `<button class="btn-add-match-active" data-poll-id="${poll.id}">+ 경기 추가</button>` : ''}
@@ -792,6 +810,7 @@ function renderHistoryAccordion({ polls, page, pages }) {
                 <button class="accordion-header" data-poll-id="${p.id}">
                     <span class="accordion-icon">►</span>
                     <span class="accordion-title">${escapeHtml(title)}</span>
+                    ${matchTypeBadge(p.is_official)}
                     <span class="accordion-meta">${p.match_count}경기 · ${dateStr}</span>
                 </button>
                 <div class="accordion-body hidden" id="accordion-body-${p.id}"></div>
@@ -934,6 +953,485 @@ function renderPollMatches(pollId) {
         });
     });
 }
+
+// ===== 최근 경기 내역 (공식 + 친선) =====
+
+async function loadRecentMatches() {
+    const el = document.getElementById('recent-matches');
+    el.innerHTML = '<p class="loading-msg" style="text-align:left">불러오는 중...</p>';
+
+    const result = await apiFetch(`/api/groups/${groupId}/matches`);
+    if (!result?.ok) {
+        el.innerHTML = '<p class="empty-msg-sm">불러오지 못했습니다.</p>';
+        return;
+    }
+    renderRecentMatches(result.data);
+}
+
+function renderRecentMatches(matches) {
+    const el = document.getElementById('recent-matches');
+
+    if (!matches.length) {
+        el.innerHTML = '<p class="empty-msg-sm">아직 기록된 경기가 없습니다.</p>';
+        return;
+    }
+
+    matches.forEach(m => {
+        matchDataCache[m.id] = {
+            pgn_data: m.pgn_data || null,
+            p1: m.player1_nickname, p2: m.player2_nickname,
+            p1Id: m.player1_id, p2Id: m.player2_id,
+            winnerId: m.winner_id ?? null, status: 'finished',
+        };
+    });
+
+    el.innerHTML = matches.map(m => {
+        const isDraw   = !m.winner_id;
+        const p1Win    = m.winner_id === m.player1_id;
+        const p2Win    = m.winner_id === m.player2_id;
+        const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
+        const hasPgn   = !!m.pgn_data;
+        const canEdit  = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
+        return `
+            <div class="recent-match-item">
+                <div class="recent-match-row">
+                    ${matchTypeBadge(m.is_official)}
+                    <span class="match-players">
+                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                        <span class="match-vs-sm">vs</span>
+                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                    </span>
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                    <span class="match-pgn-actions">
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                    </span>
+                    <span class="recent-match-date">${formatDate(m.played_at)}</span>
+                </div>
+                ${noteHtml}
+            </div>`;
+    }).join('');
+
+    el.querySelectorAll('.btn-pgn-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            openPgnModal(mid, matchDataCache[mid]?.pgn_data || '');
+        });
+    });
+    el.querySelectorAll('.btn-pgn-view').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mid = parseInt(btn.dataset.matchId);
+            const d   = matchDataCache[mid];
+            if (d?.pgn_data) openPgnViewer(d.pgn_data, d.p1, d.p2);
+        });
+    });
+}
+
+// ===== 친선 경기 직접 기록 모달 =====
+
+let selectedFriendlyResult = 'p1_win';
+
+function openFriendlyMatchModal() {
+    if (currentMembers.length < 2) {
+        alert('경기를 기록하려면 그룹에 멤버가 2명 이상 필요합니다.');
+        return;
+    }
+
+    const options = currentMembers.map(m =>
+        `<option value="${m.id}">${escapeHtml(m.nickname)}</option>`
+    ).join('');
+
+    const p1Select = document.getElementById('friendly-player1');
+    const p2Select = document.getElementById('friendly-player2');
+    p1Select.innerHTML = options;
+    p2Select.innerHTML = options;
+    p1Select.value = String(currentMembers[0].id);
+    p2Select.value = String(currentMembers[1].id);
+
+    selectedFriendlyResult = 'p1_win';
+    document.getElementById('input-friendly-note').value = '';
+    document.getElementById('friendly-match-error').textContent = '';
+    updateFriendlyResultButtons();
+    document.getElementById('modal-friendly-match').classList.remove('hidden');
+}
+
+function updateFriendlyResultButtons() {
+    const p1Sel  = document.getElementById('friendly-player1');
+    const p2Sel  = document.getElementById('friendly-player2');
+    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || '백';
+    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || '흑';
+
+    document.getElementById('btn-friendly-p1-win').textContent = `${p1Name} 승 (백)`;
+    document.getElementById('btn-friendly-p2-win').textContent = `${p2Name} 승 (흑)`;
+
+    document.querySelectorAll('.btn-friendly-result').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.result === selectedFriendlyResult);
+    });
+}
+
+document.getElementById('btn-record-friendly').addEventListener('click', openFriendlyMatchModal);
+
+document.getElementById('btn-swap-friendly-players').addEventListener('click', () => {
+    const p1Select = document.getElementById('friendly-player1');
+    const p2Select = document.getElementById('friendly-player2');
+    const tmp = p1Select.value;
+    p1Select.value = p2Select.value;
+    p2Select.value = tmp;
+
+    if (selectedFriendlyResult === 'p1_win')      selectedFriendlyResult = 'p2_win';
+    else if (selectedFriendlyResult === 'p2_win') selectedFriendlyResult = 'p1_win';
+
+    updateFriendlyResultButtons();
+});
+
+document.getElementById('friendly-player1').addEventListener('change', updateFriendlyResultButtons);
+document.getElementById('friendly-player2').addEventListener('change', updateFriendlyResultButtons);
+
+document.querySelectorAll('.btn-friendly-result').forEach(btn => {
+    btn.addEventListener('click', () => {
+        selectedFriendlyResult = btn.dataset.result;
+        updateFriendlyResultButtons();
+    });
+});
+
+document.getElementById('btn-confirm-friendly-match').addEventListener('click', async () => {
+    const p1Id    = parseInt(document.getElementById('friendly-player1').value);
+    const p2Id    = parseInt(document.getElementById('friendly-player2').value);
+    const note    = document.getElementById('input-friendly-note').value.trim();
+    const errorEl = document.getElementById('friendly-match-error');
+    errorEl.textContent = '';
+
+    if (p1Id === p2Id) {
+        errorEl.textContent = '백과 흑 선수는 달라야 합니다.';
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-friendly-match');
+    btn.disabled = true;
+    btn.textContent = '기록 중...';
+
+    try {
+        const result = await apiFetch(`/api/groups/${groupId}/matches/friendly`, {
+            method: 'POST',
+            body: JSON.stringify({ player1_id: p1Id, player2_id: p2Id, result: selectedFriendlyResult, note }),
+        });
+        if (result?.ok) {
+            document.getElementById('modal-friendly-match').classList.add('hidden');
+            await loadRecentMatches();
+        } else {
+            errorEl.textContent = result?.data?.detail || '기록에 실패했습니다.';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '기록';
+    }
+});
+
+// ===== 친선 경기 폴더 모달 =====
+
+document.getElementById('btn-open-folders').addEventListener('click', openFriendlyFoldersModal);
+
+async function openFriendlyFoldersModal() {
+    openFolderId     = null;
+    folderMatchCache = {};
+    renamingFolderId = null;
+    selectedManageIds.clear();
+
+    document.getElementById('btn-folder-manage-toggle').classList.toggle('hidden', !isAdmin());
+    document.getElementById('folder-manage-panel').classList.add('hidden');
+    document.getElementById('btn-folder-manage-toggle').classList.remove('active');
+    document.getElementById('input-new-folder-name').value = '';
+    document.getElementById('folder-manage-error').textContent = '';
+
+    document.getElementById('modal-friendly-folders').classList.remove('hidden');
+
+    await loadFolders();
+    if (isAdmin()) await loadManageMatches();
+}
+
+document.getElementById('btn-folder-manage-toggle').addEventListener('click', () => {
+    const panel = document.getElementById('folder-manage-panel');
+    const btn   = document.getElementById('btn-folder-manage-toggle');
+    const isOpen = !panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', isOpen);
+    btn.classList.toggle('active', !isOpen);
+});
+
+async function loadFolders() {
+    const result = await apiFetch(`/api/groups/${groupId}/friendly-folders`);
+    allFolders = result?.ok ? result.data : [];
+    renderFolderAccordion();
+    renderFolderSelectOptions();
+}
+
+function renderFolderSelectOptions() {
+    const select = document.getElementById('select-assign-folder');
+    const current = select.value;
+    select.innerHTML = '<option value="">폴더 선택...</option>' +
+        allFolders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+    if (allFolders.some(f => String(f.id) === current)) select.value = current;
+}
+
+function renderFolderAccordion() {
+    const el = document.getElementById('folder-view-content');
+
+    if (!allFolders.length) {
+        el.innerHTML = '<p class="empty-msg-sm">생성된 폴더가 없습니다.</p>';
+        return;
+    }
+
+    el.innerHTML = allFolders.map(f => {
+        if (renamingFolderId === f.id) {
+            return `
+                <div class="history-accordion">
+                    <div class="folder-rename-row">
+                        <input type="text" id="input-rename-folder" class="form-input" value="${escapeHtml(f.name)}" maxlength="50">
+                        <button class="btn-folder-icon btn-folder-save" data-folder-id="${f.id}" title="저장">&#10003;</button>
+                        <button class="btn-folder-icon btn-folder-cancel-rename" title="취소">&#10005;</button>
+                    </div>
+                </div>`;
+        }
+        return `
+            <div class="history-accordion">
+                <div class="folder-head-row">
+                    <button class="accordion-header" data-folder-id="${f.id}">
+                        <span class="accordion-icon">►</span>
+                        <span class="accordion-title">${escapeHtml(f.name)}</span>
+                        <span class="accordion-meta">${f.match_count}경기</span>
+                    </button>
+                    ${isAdmin() ? `
+                        <div class="folder-admin-actions">
+                            <button class="btn-folder-icon btn-rename-folder" data-folder-id="${f.id}" title="이름 변경">&#9998;</button>
+                            <button class="btn-folder-icon btn-delete-folder" data-folder-id="${f.id}" data-folder-name="${escapeHtml(f.name)}" title="삭제">&#128465;</button>
+                        </div>` : ''}
+                </div>
+                <div class="accordion-body hidden" id="folder-body-${f.id}"></div>
+            </div>`;
+    }).join('');
+
+    el.querySelectorAll('.accordion-header').forEach(btn => {
+        btn.addEventListener('click', () => toggleFolderAccordion(parseInt(btn.dataset.folderId)));
+    });
+    el.querySelectorAll('.btn-rename-folder').forEach(btn => {
+        btn.addEventListener('click', () => {
+            renamingFolderId = parseInt(btn.dataset.folderId);
+            renderFolderAccordion();
+            setTimeout(() => document.getElementById('input-rename-folder')?.focus(), 50);
+        });
+    });
+    el.querySelectorAll('.btn-folder-cancel-rename').forEach(btn => {
+        btn.addEventListener('click', () => { renamingFolderId = null; renderFolderAccordion(); });
+    });
+    el.querySelectorAll('.btn-folder-save').forEach(btn => {
+        btn.addEventListener('click', () => renameFolder(parseInt(btn.dataset.folderId)));
+    });
+    el.querySelectorAll('.btn-delete-folder').forEach(btn => {
+        btn.addEventListener('click', () => deleteFolder(parseInt(btn.dataset.folderId), btn.dataset.folderName));
+    });
+}
+
+async function toggleFolderAccordion(folderId) {
+    const body = document.getElementById(`folder-body-${folderId}`);
+    const icon = document.querySelector(`.accordion-header[data-folder-id="${folderId}"] .accordion-icon`);
+    if (!body) return;
+
+    const isOpen = !body.classList.contains('hidden');
+
+    if (openFolderId && openFolderId !== folderId) {
+        const prevBody = document.getElementById(`folder-body-${openFolderId}`);
+        const prevIcon = document.querySelector(`.accordion-header[data-folder-id="${openFolderId}"] .accordion-icon`);
+        if (prevBody) prevBody.classList.add('hidden');
+        if (prevIcon) prevIcon.textContent = '►';
+    }
+
+    if (isOpen) {
+        body.classList.add('hidden');
+        icon.textContent = '►';
+        openFolderId = null;
+    } else {
+        body.classList.remove('hidden');
+        icon.textContent = '▼';
+        openFolderId = folderId;
+        if (!folderMatchCache[folderId]) {
+            body.innerHTML = '<p class="accordion-loading">불러오는 중...</p>';
+            const result = await apiFetch(`/api/friendly-folders/${folderId}/matches`);
+            folderMatchCache[folderId] = result?.ok ? result.data.matches : [];
+        }
+        renderFolderMatches(folderId);
+    }
+}
+
+function renderFolderMatches(folderId) {
+    const body    = document.getElementById(`folder-body-${folderId}`);
+    const matches = folderMatchCache[folderId];
+
+    if (!matches?.length) {
+        body.innerHTML = '<p class="empty-msg-sm">이 폴더에 담긴 경기가 없습니다.</p>';
+        return;
+    }
+
+    body.innerHTML = matches.map(m => {
+        const isDraw   = !m.winner_id;
+        const p1Win    = m.winner_id === m.player1_id;
+        const p2Win    = m.winner_id === m.player2_id;
+        const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
+        return `
+            <div class="accordion-match-item folder-match-item">
+                <span class="match-players">
+                    <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                    <span class="match-vs-sm">vs</span>
+                    <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                </span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                <span class="recent-match-date">${formatDate(m.played_at)}</span>
+                ${noteHtml}
+            </div>`;
+    }).join('');
+}
+
+async function renameFolder(folderId) {
+    const name = document.getElementById('input-rename-folder').value.trim();
+    if (!name) return;
+
+    const result = await apiFetch(`/api/friendly-folders/${folderId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name }),
+    });
+    if (result?.ok) {
+        renamingFolderId = null;
+        await loadFolders();
+    } else {
+        alert(result?.data?.detail || '이름 변경에 실패했습니다.');
+    }
+}
+
+async function deleteFolder(folderId, folderName) {
+    if (!confirm(`'${folderName}' 폴더를 삭제하시겠습니까? 안의 경기는 삭제되지 않고 미분류 상태가 됩니다.`)) return;
+
+    const result = await apiFetch(`/api/friendly-folders/${folderId}`, { method: 'DELETE' });
+    if (result?.ok) {
+        delete folderMatchCache[folderId];
+        if (openFolderId === folderId) openFolderId = null;
+        await loadFolders();
+        if (isAdmin()) await loadManageMatches();
+    } else {
+        alert(result?.data?.detail || '삭제에 실패했습니다.');
+    }
+}
+
+document.getElementById('btn-create-folder').addEventListener('click', async () => {
+    const name    = document.getElementById('input-new-folder-name').value.trim();
+    const errorEl = document.getElementById('folder-manage-error');
+    errorEl.textContent = '';
+
+    if (!name) {
+        errorEl.textContent = '폴더 이름을 입력해주세요.';
+        return;
+    }
+
+    const btn = document.getElementById('btn-create-folder');
+    btn.disabled = true;
+    btn.textContent = '생성 중...';
+
+    try {
+        const result = await apiFetch(`/api/groups/${groupId}/friendly-folders`, {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+        });
+        if (result?.ok) {
+            document.getElementById('input-new-folder-name').value = '';
+            await loadFolders();
+        } else {
+            errorEl.textContent = result?.data?.detail || '폴더 생성에 실패했습니다.';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '폴더 생성';
+    }
+});
+
+document.getElementById('input-new-folder-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-create-folder').click();
+});
+
+async function loadManageMatches() {
+    const result = await apiFetch(`/api/groups/${groupId}/matches/friendly`);
+    manageMatches = result?.ok ? result.data : [];
+    selectedManageIds.clear();
+    renderManageMatchList();
+}
+
+function renderManageMatchList() {
+    const el = document.getElementById('folder-manage-match-list');
+
+    if (!manageMatches.length) {
+        el.innerHTML = '<p class="empty-msg-sm">직접 기록된 친선 경기가 없습니다.</p>';
+        return;
+    }
+
+    el.innerHTML = manageMatches.map(m => {
+        const isDraw = !m.winner_id;
+        const p1Win  = m.winner_id === m.player1_id;
+        const p2Win  = m.winner_id === m.player2_id;
+        const folderTag = m.folder_id
+            ? `<span class="official-badge friendly">${escapeHtml(m.folder_name)}</span>`
+            : `<span class="official-badge unfoldered">미분류</span>`;
+        return `
+            <label class="folder-manage-row">
+                <input type="checkbox" class="manage-match-checkbox" data-match-id="${m.id}" ${selectedManageIds.has(m.id) ? 'checked' : ''}>
+                <span class="match-players">
+                    <span class="${p1Win ? 'match-winner-name' : ''}">${escapeHtml(m.player1_nickname)}</span>
+                    <span class="match-vs-sm">vs</span>
+                    <span class="${p2Win ? 'match-winner-name' : ''}">${escapeHtml(m.player2_nickname)}</span>
+                </span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                ${folderTag}
+            </label>`;
+    }).join('');
+
+    el.querySelectorAll('.manage-match-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const id = parseInt(cb.dataset.matchId);
+            if (cb.checked) selectedManageIds.add(id);
+            else selectedManageIds.delete(id);
+        });
+    });
+}
+
+async function assignSelectedMatches(folderId) {
+    const errorEl = document.getElementById('folder-manage-error');
+    errorEl.textContent = '';
+
+    if (!selectedManageIds.size) {
+        errorEl.textContent = '경기를 하나 이상 선택해주세요.';
+        return;
+    }
+    if (folderId !== null && !folderId) {
+        errorEl.textContent = '담을 폴더를 선택해주세요.';
+        return;
+    }
+
+    const result = await apiFetch(`/api/groups/${groupId}/friendly-matches/assign-folder`, {
+        method: 'POST',
+        body: JSON.stringify({ match_ids: [...selectedManageIds], folder_id: folderId }),
+    });
+
+    if (result?.ok) {
+        await loadFolders();
+        await loadManageMatches();
+    } else {
+        errorEl.textContent = result?.data?.detail || '처리에 실패했습니다.';
+    }
+}
+
+document.getElementById('btn-assign-to-folder').addEventListener('click', () => {
+    const folderId = parseInt(document.getElementById('select-assign-folder').value);
+    assignSelectedMatches(isNaN(folderId) ? undefined : folderId);
+});
+
+document.getElementById('btn-remove-from-folder').addEventListener('click', () => {
+    assignSelectedMatches(null);
+});
 
 // ===== API 액션 =====
 
@@ -1417,7 +1915,7 @@ async function refreshPage() {
     if (pollRes?.ok)    renderPollSection(pollRes.data);
     if (historyRes?.ok) renderHistoryAccordion(historyRes.data);
 
-    await loadLatestAnnouncement();
+    await Promise.all([loadLatestAnnouncement(), loadRecentMatches()]);
 
     document.getElementById('activity-log-btn-row')
         .classList.toggle('hidden', !isAdmin());
@@ -1433,6 +1931,12 @@ const ACTION_LABELS = {
     '경기_결과수정': '경기 결과 수정',
     '경기_수정':     '경기 수정',
     '경기_추가':     '경기 추가',
+    '친선경기_기록': '친선 경기 기록',
+    '폴더_생성':     '폴더 생성',
+    '폴더_수정':     '폴더 수정',
+    '폴더_삭제':     '폴더 삭제',
+    '친선경기_폴더담기': '친선 경기 폴더 담기',
+    '친선경기_폴더빼기': '친선 경기 폴더 빼기',
     '멤버_강퇴':     '멤버 강퇴',
     '역할_변경':     '역할 변경',
 };
@@ -1445,6 +1949,12 @@ const ACTION_COLORS = {
     '경기_결과수정': '#f0a04b',
     '경기_수정':     '#f0a04b',
     '경기_추가':     '#4caf87',
+    '친선경기_기록': '#6fcf97',
+    '폴더_생성':     '#7b9ed4',
+    '폴더_수정':     '#f0a04b',
+    '폴더_삭제':     '#e07070',
+    '친선경기_폴더담기': '#6fcf97',
+    '친선경기_폴더빼기': '#9b9b9b',
     '멤버_강퇴':     '#e07070',
     '역할_변경':     '#9b7ed4',
 };

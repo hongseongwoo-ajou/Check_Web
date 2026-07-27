@@ -123,23 +123,28 @@ def init_db():
                 winner_id   INTEGER,
                 recorded_by INTEGER NOT NULL,
                 status      TEXT    NOT NULL DEFAULT 'playing',
+                is_official INTEGER NOT NULL DEFAULT 1,
+                note        TEXT,
+                folder_id   INTEGER,
                 played_at   TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (group_id)    REFERENCES groups(id),
                 FOREIGN KEY (poll_id)     REFERENCES polls(id),
                 FOREIGN KEY (player1_id)  REFERENCES users(id),
                 FOREIGN KEY (player2_id)  REFERENCES users(id),
                 FOREIGN KEY (winner_id)   REFERENCES users(id),
-                FOREIGN KEY (recorded_by) REFERENCES users(id)
+                FOREIGN KEY (recorded_by) REFERENCES users(id),
+                FOREIGN KEY (folder_id)   REFERENCES match_folders(id)
             )
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS polls (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id   INTEGER NOT NULL,
-                created_by INTEGER NOT NULL,
-                title      TEXT    NOT NULL DEFAULT '',
-                status     TEXT    NOT NULL DEFAULT 'voting',
-                created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id    INTEGER NOT NULL,
+                created_by  INTEGER NOT NULL,
+                title       TEXT    NOT NULL DEFAULT '',
+                status      TEXT    NOT NULL DEFAULT 'voting',
+                is_official INTEGER NOT NULL DEFAULT 1,
+                created_at  TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (group_id)   REFERENCES groups(id),
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
@@ -188,6 +193,17 @@ def init_db():
                 FOREIGN KEY (user_id)  REFERENCES users(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS match_folders (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id   INTEGER NOT NULL,
+                name       TEXT    NOT NULL,
+                created_by INTEGER NOT NULL,
+                created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+                FOREIGN KEY (group_id)   REFERENCES groups(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+        """)
         conn.commit()
 
 
@@ -205,6 +221,19 @@ def migrate_db():
         "ALTER TABLE polls ADD COLUMN title TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE matches ADD COLUMN pgn_data TEXT",
         "ALTER TABLE group_settings ADD COLUMN is_color_automatic INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE matches ADD COLUMN is_official INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE matches ADD COLUMN note TEXT",
+        "ALTER TABLE matches ADD COLUMN folder_id INTEGER",
+        "ALTER TABLE polls ADD COLUMN is_official INTEGER NOT NULL DEFAULT 1",
+        """CREATE TABLE IF NOT EXISTS match_folders (
+               id         INTEGER PRIMARY KEY AUTOINCREMENT,
+               group_id   INTEGER NOT NULL,
+               name       TEXT    NOT NULL,
+               created_by INTEGER NOT NULL,
+               created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+               FOREIGN KEY (group_id)   REFERENCES groups(id),
+               FOREIGN KEY (created_by) REFERENCES users(id)
+           )""",
         """CREATE TABLE IF NOT EXISTS activity_logs (
                id         INTEGER PRIMARY KEY AUTOINCREMENT,
                group_id   INTEGER NOT NULL,
@@ -244,12 +273,13 @@ def migrate_db():
         try:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS polls (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    group_id   INTEGER NOT NULL,
-                    created_by INTEGER NOT NULL,
-                    title      TEXT    NOT NULL DEFAULT '',
-                    status     TEXT    NOT NULL DEFAULT 'voting',
-                    created_at TEXT    DEFAULT (datetime('now', '+9 hours')),
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    group_id    INTEGER NOT NULL,
+                    created_by  INTEGER NOT NULL,
+                    title       TEXT    NOT NULL DEFAULT '',
+                    status      TEXT    NOT NULL DEFAULT 'voting',
+                    is_official INTEGER NOT NULL DEFAULT 1,
+                    created_at  TEXT    DEFAULT (datetime('now', '+9 hours')),
                     FOREIGN KEY (group_id)   REFERENCES groups(id),
                     FOREIGN KEY (created_by) REFERENCES users(id)
                 )
@@ -421,6 +451,7 @@ class UpdateChessRequest(BaseModel):
 
 class CreatePollRequest(BaseModel):
     title: str = ""
+    is_official: bool = True
 
 
 class GroupSettingsRequest(BaseModel):
@@ -448,6 +479,26 @@ class AddMatchRequest(BaseModel):
     player1_id: int
     player2_id: int
     result: str  # "p1_win" | "p2_win" | "draw"
+
+
+class FriendlyMatchRequest(BaseModel):
+    player1_id: int
+    player2_id: int
+    result: str  # "p1_win" | "p2_win" | "draw"
+    note: str = Field(default="", max_length=500)
+
+
+class CreateFolderRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+
+
+class RenameFolderRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+
+
+class AssignFolderRequest(BaseModel):
+    match_ids: list[int] = Field(min_length=1)
+    folder_id: Optional[int] = None  # null이면 폴더에서 뺌
 
 
 class UpdateProfileRequest(BaseModel):
@@ -976,7 +1027,7 @@ async def get_group_matches(group_id: int, user=Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
 
         matches = conn.execute(
-            """SELECT m.id, m.played_at, m.pgn_data,
+            """SELECT m.id, m.played_at, m.pgn_data, m.is_official, m.note,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -1015,7 +1066,7 @@ async def get_group_history(group_id: int, page: int = 1, user=Depends(get_curre
         pages = max(1, (total + per_page - 1) // per_page)
 
         polls = conn.execute(
-            """SELECT p.id, p.title, p.created_at,
+            """SELECT p.id, p.title, p.created_at, p.is_official,
                       COUNT(m.id) AS match_count
                FROM polls p
                LEFT JOIN matches m ON m.poll_id = p.id AND m.status = 'finished'
@@ -1091,12 +1142,12 @@ async def create_poll(group_id: int, req: CreatePollRequest, user=Depends(get_cu
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
         cursor = conn.execute(
-            "INSERT INTO polls (group_id, created_by, title) VALUES (?, ?, ?)",
-            (group_id, user["id"], req.title.strip()),
+            "INSERT INTO polls (group_id, created_by, title, is_official) VALUES (?, ?, ?, ?)",
+            (group_id, user["id"], req.title.strip(), int(req.is_official)),
         )
         poll_id = cursor.lastrowid
         conn.commit()
-    return {"id": poll_id, "status": "voting"}
+    return {"id": poll_id, "status": "voting", "is_official": req.is_official}
 
 
 @app.get("/api/groups/{group_id}/polls/active")
@@ -1224,9 +1275,9 @@ async def close_poll(poll_id: int, user=Depends(get_current_user)):
 
         for p1, p2 in pairs:
             conn.execute(
-                """INSERT INTO matches (group_id, poll_id, player1_id, player2_id, recorded_by, status)
-                   VALUES (?, ?, ?, ?, ?, 'playing')""",
-                (poll["group_id"], poll_id, p1["id"], p2["id"], user["id"]),
+                """INSERT INTO matches (group_id, poll_id, player1_id, player2_id, recorded_by, status, is_official)
+                   VALUES (?, ?, ?, ?, ?, 'playing', ?)""",
+                (poll["group_id"], poll_id, p1["id"], p2["id"], user["id"], poll["is_official"]),
             )
 
         conn.execute("UPDATE polls SET status = 'playing' WHERE id = ?", (poll_id,))
@@ -1281,15 +1332,236 @@ async def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get
 
         conn.execute(
             """INSERT INTO matches
-               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status)
-               VALUES (?, ?, ?, ?, ?, ?, 'finished')""",
-            (poll["group_id"], poll_id, req.player1_id, req.player2_id, winner_id, user["id"]),
+               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official)
+               VALUES (?, ?, ?, ?, ?, ?, 'finished', ?)""",
+            (poll["group_id"], poll_id, req.player1_id, req.player2_id, winner_id, user["id"], poll["is_official"]),
         )
         _log(conn, poll["group_id"], user["id"], "경기_추가",
              f"'{poll['title']}': {nicks[req.player1_id]}(백) vs {nicks[req.player2_id]}(흑) — {result_str}")
         conn.commit()
 
     return {"message": "경기가 추가되었습니다."}
+
+
+@app.post("/api/groups/{group_id}/matches/friendly", status_code=201)
+async def record_friendly_match(group_id: int, req: FriendlyMatchRequest, user=Depends(get_current_user)):
+    """투표 절차 없이 친선 경기를 즉시 기록. 항상 is_official=False로 저장됨."""
+    if req.result not in ("p1_win", "p2_win", "draw"):
+        raise HTTPException(status_code=400, detail="결과는 p1_win, p2_win, draw 중 하나여야 합니다.")
+    if req.player1_id == req.player2_id:
+        raise HTTPException(status_code=400, detail="백과 흑 선수는 달라야 합니다.")
+
+    with get_db() as conn:
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+
+        for pid in (req.player1_id, req.player2_id):
+            if not conn.execute(
+                "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+                (pid, group_id),
+            ).fetchone():
+                raise HTTPException(status_code=400, detail="선택한 선수가 해당 그룹 멤버가 아닙니다.")
+
+        winner_id = (
+            req.player1_id if req.result == "p1_win" else
+            req.player2_id if req.result == "p2_win" else
+            None
+        )
+
+        nicks = {
+            row["id"]: row["nickname"]
+            for row in conn.execute(
+                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
+                (req.player1_id, req.player2_id),
+            ).fetchall()
+        }
+        result_str = {"p1_win": f"{nicks[req.player1_id]} 승", "p2_win": f"{nicks[req.player2_id]} 승", "draw": "무승부"}[req.result]
+
+        cursor = conn.execute(
+            """INSERT INTO matches
+               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official, note)
+               VALUES (?, NULL, ?, ?, ?, ?, 'finished', 0, ?)""",
+            (group_id, req.player1_id, req.player2_id, winner_id, user["id"], req.note.strip()),
+        )
+        match_id = cursor.lastrowid
+        _log(conn, group_id, user["id"], "친선경기_기록",
+             f"{nicks[req.player1_id]}(백) vs {nicks[req.player2_id]}(흑) — {result_str}")
+        conn.commit()
+
+    return {"id": match_id, "message": "친선 경기가 기록되었습니다."}
+
+
+# ---------- 친선 경기 폴더 ----------
+
+@app.get("/api/groups/{group_id}/friendly-folders")
+async def list_friendly_folders(group_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+
+        folders = conn.execute(
+            """SELECT f.id, f.name, f.created_at, u.nickname AS created_by_nickname,
+                      COUNT(m.id) AS match_count
+               FROM match_folders f
+               JOIN users u ON f.created_by = u.id
+               LEFT JOIN matches m ON m.folder_id = f.id
+               WHERE f.group_id = ?
+               GROUP BY f.id
+               ORDER BY f.created_at DESC""",
+            (group_id,),
+        ).fetchall()
+
+    return [dict(f) for f in folders]
+
+
+@app.post("/api/groups/{group_id}/friendly-folders", status_code=201)
+async def create_friendly_folder(group_id: int, req: CreateFolderRequest, user=Depends(get_current_user)):
+    with get_db() as conn:
+        _check_admin(conn, user["id"], group_id)
+        cursor = conn.execute(
+            "INSERT INTO match_folders (group_id, name, created_by) VALUES (?, ?, ?)",
+            (group_id, req.name.strip(), user["id"]),
+        )
+        folder_id = cursor.lastrowid
+        _log(conn, group_id, user["id"], "폴더_생성", f"'{req.name.strip()}' 폴더 생성")
+        conn.commit()
+
+    return {"id": folder_id, "name": req.name.strip()}
+
+
+def _get_folder_or_404(conn, folder_id: int):
+    folder = conn.execute("SELECT * FROM match_folders WHERE id = ?", (folder_id,)).fetchone()
+    if not folder:
+        raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+    return folder
+
+
+@app.put("/api/friendly-folders/{folder_id}")
+async def rename_friendly_folder(folder_id: int, req: RenameFolderRequest, user=Depends(get_current_user)):
+    with get_db() as conn:
+        folder = _get_folder_or_404(conn, folder_id)
+        _check_admin(conn, user["id"], folder["group_id"])
+
+        conn.execute(
+            "UPDATE match_folders SET name = ? WHERE id = ?",
+            (req.name.strip(), folder_id),
+        )
+        _log(conn, folder["group_id"], user["id"], "폴더_수정",
+             f"'{folder['name']}' → '{req.name.strip()}'")
+        conn.commit()
+
+    return {"id": folder_id, "name": req.name.strip()}
+
+
+@app.delete("/api/friendly-folders/{folder_id}")
+async def delete_friendly_folder(folder_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        folder = _get_folder_or_404(conn, folder_id)
+        _check_admin(conn, user["id"], folder["group_id"])
+
+        conn.execute("UPDATE matches SET folder_id = NULL WHERE folder_id = ?", (folder_id,))
+        conn.execute("DELETE FROM match_folders WHERE id = ?", (folder_id,))
+        _log(conn, folder["group_id"], user["id"], "폴더_삭제", f"'{folder['name']}' 폴더 삭제")
+        conn.commit()
+
+    return {"message": "폴더가 삭제되었습니다."}
+
+
+@app.get("/api/friendly-folders/{folder_id}/matches")
+async def get_folder_matches(folder_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        folder = _get_folder_or_404(conn, folder_id)
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], folder["group_id"]),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+
+        matches = conn.execute(
+            """SELECT m.id, m.played_at, m.note,
+                      p1.id AS player1_id, p1.nickname AS player1_nickname,
+                      p2.id AS player2_id, p2.nickname AS player2_nickname,
+                      w.id AS winner_id, w.nickname AS winner_nickname
+               FROM matches m
+               JOIN users p1 ON m.player1_id = p1.id
+               JOIN users p2 ON m.player2_id = p2.id
+               LEFT JOIN users w ON m.winner_id = w.id
+               WHERE m.folder_id = ?
+               ORDER BY m.played_at DESC""",
+            (folder_id,),
+        ).fetchall()
+
+    return {"folder": {"id": folder["id"], "name": folder["name"]}, "matches": [dict(m) for m in matches]}
+
+
+@app.get("/api/groups/{group_id}/matches/friendly")
+async def list_friendly_matches(group_id: int, user=Depends(get_current_user)):
+    """직접 기록된(투표 없는) 친선 경기 전체 목록. 폴더 관리 UI에서 사용."""
+    with get_db() as conn:
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+
+        matches = conn.execute(
+            """SELECT m.id, m.played_at, m.note, m.folder_id, f.name AS folder_name,
+                      p1.id AS player1_id, p1.nickname AS player1_nickname,
+                      p2.id AS player2_id, p2.nickname AS player2_nickname,
+                      w.id AS winner_id, w.nickname AS winner_nickname
+               FROM matches m
+               JOIN users p1 ON m.player1_id = p1.id
+               JOIN users p2 ON m.player2_id = p2.id
+               LEFT JOIN users w ON m.winner_id = w.id
+               LEFT JOIN match_folders f ON m.folder_id = f.id
+               WHERE m.group_id = ? AND m.is_official = 0 AND m.poll_id IS NULL
+               ORDER BY m.played_at DESC""",
+            (group_id,),
+        ).fetchall()
+
+    return [dict(m) for m in matches]
+
+
+@app.post("/api/groups/{group_id}/friendly-matches/assign-folder")
+async def assign_matches_to_folder(group_id: int, req: AssignFolderRequest, user=Depends(get_current_user)):
+    with get_db() as conn:
+        _check_admin(conn, user["id"], group_id)
+
+        if req.folder_id is not None:
+            folder = conn.execute(
+                "SELECT * FROM match_folders WHERE id = ? AND group_id = ?",
+                (req.folder_id, group_id),
+            ).fetchone()
+            if not folder:
+                raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+
+        placeholders = ",".join("?" * len(req.match_ids))
+        rows = conn.execute(
+            f"""SELECT id FROM matches
+                WHERE id IN ({placeholders}) AND group_id = ? AND is_official = 0 AND poll_id IS NULL""",
+            (*req.match_ids, group_id),
+        ).fetchall()
+        valid_ids = [r["id"] for r in rows]
+        if not valid_ids:
+            raise HTTPException(status_code=400, detail="유효한 친선 경기가 없습니다.")
+
+        vp = ",".join("?" * len(valid_ids))
+        conn.execute(
+            f"UPDATE matches SET folder_id = ? WHERE id IN ({vp})",
+            (req.folder_id, *valid_ids),
+        )
+
+        action = "친선경기_폴더담기" if req.folder_id is not None else "친선경기_폴더빼기"
+        _log(conn, group_id, user["id"], action, f"{len(valid_ids)}개 경기")
+        conn.commit()
+
+    return {"message": f"{len(valid_ids)}개 경기가 처리되었습니다.", "updated": valid_ids}
 
 
 @app.post("/api/polls/{poll_id}/reopen")
@@ -1364,7 +1636,7 @@ async def get_leaderboard(group_id: int, user=Depends(get_current_user)):
             uid = m["id"]
             results = conn.execute(
                 """SELECT winner_id FROM matches
-                   WHERE group_id = ? AND status = 'finished'
+                   WHERE group_id = ? AND status = 'finished' AND is_official = 1
                      AND (player1_id = ? OR player2_id = ?)""",
                 (group_id, uid, uid),
             ).fetchall()
