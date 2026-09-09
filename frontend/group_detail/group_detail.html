@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <script src="../css/theme-init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>그룹 상세 - 체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
@@ -15,13 +16,20 @@
     <!-- 페이지 초기 로딩 오버레이 -->
     <div id="page-loader" class="page-loader">
         <div class="spinner"></div>
-        <p class="page-loader-text">불러오는 중...</p>
+        <p class="page-loader-text" data-i18n="common.loading">불러오는 중...</p>
     </div>
 
     <header class="detail-header">
-        <a href="../lobby/lobby.html" class="btn-back">&#8592; 로비로 돌아가기</a>
+        <a href="../lobby/lobby.html" class="btn-back" data-i18n="common.backToLobby">&#8592; 로비로 돌아가기</a>
         <div class="header-logo">♟ Chess Club</div>
-        <button id="btn-logout" class="btn-logout">로그아웃</button>
+        <div class="header-actions">
+            <div class="lang-switcher">
+                <button class="lang-btn" data-lang="ko">한</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+            </div>
+            <button id="theme-toggle" class="theme-toggle-btn" title="테마 전환">🌙</button>
+            <button id="btn-logout" class="btn-logout" data-i18n="common.logout">로그아웃</button>
+        </div>
     </header>
 
     <main class="detail-main">
@@ -35,56 +43,56 @@
                     <h1 class="page-title" id="group-name">-</h1>
                     <div class="title-actions">
                         <div class="invite-badge">
-                            초대 코드: <code id="invite-code" class="invite-code">-</code>
-                            <button id="btn-copy" class="btn-copy" title="복사">복사</button>
+                            <span data-i18n="lobby.inviteCodeShortLabel">초대 코드:</span> <code id="invite-code" class="invite-code">-</code>
+                            <button id="btn-copy" class="btn-copy" title="복사" data-i18n="groupDetail.copy" data-i18n-title="groupDetail.copy">복사</button>
                         </div>
-                        <button id="btn-group-settings" class="btn-group-settings hidden">그룹 설정</button>
-                        <button id="btn-leaderboard" class="btn-leaderboard">순위표 보기</button>
+                        <button id="btn-group-settings" class="btn-group-settings hidden" data-i18n="groupDetail.groupSettings">그룹 설정</button>
+                        <button id="btn-leaderboard" class="btn-leaderboard" data-i18n="groupDetail.viewLeaderboard">순위표 보기</button>
                     </div>
                 </div>
 
                 <!-- 공지사항 -->
                 <section id="announcement-section" class="detail-card">
                     <div class="card-head-row">
-                        <h2 class="card-heading">공지사항</h2>
-                        <button id="btn-write-announcement" class="btn-write-announcement hidden">+ 공지 작성</button>
+                        <h2 class="card-heading" data-i18n="groupDetail.announcementsHeading">공지사항</h2>
+                        <button id="btn-write-announcement" class="btn-write-announcement hidden" data-i18n="groupDetail.writeAnnouncement">+ 공지 작성</button>
                     </div>
                     <div id="announcement-latest">
-                        <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                        <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
                     </div>
                 </section>
 
                 <!-- 활동 기록 버튼 (관리자 전용) -->
                 <div id="activity-log-btn-row" class="hidden">
-                    <button id="btn-open-activity-log" class="btn-activity-log">
+                    <button id="btn-open-activity-log" class="btn-activity-log" data-i18n="groupDetail.activityLog">
                         &#128221; 활동 기록
                     </button>
                 </div>
 
                 <!-- 진행 중인 투표 / 대진표 (JS로 동적 렌더링) -->
                 <section id="poll-section" class="detail-card">
-                    <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                    <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
                 </section>
 
                 <!-- 최근 경기 내역 (공식 + 친선) -->
                 <section class="detail-card">
                     <div class="card-head-row">
-                        <h2 class="card-heading">최근 경기 내역</h2>
+                        <h2 class="card-heading" data-i18n="groupDetail.recentMatchesHeading">최근 경기 내역</h2>
                         <div class="head-buttons">
-                            <button id="btn-open-folders" class="btn-record-friendly">친선 경기 폴더</button>
-                            <button id="btn-record-friendly" class="btn-record-friendly">+ 친선 경기 직접 기록</button>
+                            <button id="btn-open-folders" class="btn-record-friendly" data-i18n="groupDetail.friendlyFolders">친선 경기 폴더</button>
+                            <button id="btn-record-friendly" class="btn-record-friendly" data-i18n="groupDetail.recordFriendlyMatch">+ 친선 경기 직접 기록</button>
                         </div>
                     </div>
                     <div id="recent-matches">
-                        <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                        <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
                     </div>
                 </section>
 
                 <!-- 지난 경기 결과 -->
                 <section class="detail-card">
-                    <h2 class="card-heading">지난 경기 결과</h2>
+                    <h2 class="card-heading" data-i18n="groupDetail.matchHistoryHeading">지난 경기 결과</h2>
                     <div id="match-history">
-                        <p class="empty-msg-sm">아직 기록된 경기가 없습니다.</p>
+                        <p class="empty-msg-sm" data-i18n="groupDetail.noMatchHistory">아직 기록된 경기가 없습니다.</p>
                     </div>
                 </section>
 
@@ -93,9 +101,9 @@
             <!-- ===== 사이드바: 멤버 목록 ===== -->
             <aside class="detail-sidebar">
                 <section class="detail-card">
-                    <h2 class="card-heading">멤버 <span id="member-count" class="count-badge"></span></h2>
+                    <h2 class="card-heading"><span data-i18n="groupDetail.membersHeading">멤버</span> <span id="member-count" class="count-badge"></span></h2>
                     <ol id="member-list" class="member-list">
-                        <li class="loading-msg">불러오는 중...</li>
+                        <li class="loading-msg" data-i18n="common.loading">불러오는 중...</li>
                     </ol>
                 </section>
             </aside>
@@ -108,31 +116,31 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-lg">
             <div class="activity-log-modal-header">
-                <h3 class="modal-title" style="margin:0">활동 기록</h3>
+                <h3 class="modal-title" style="margin:0" data-i18n="groupDetail.activityLogTitle">활동 기록</h3>
                 <div class="activity-log-modal-actions">
                     <select id="activity-log-filter" class="form-input activity-filter-select">
-                        <option value="">전체</option>
-                        <option value="투표_종료">투표 종료</option>
-                        <option value="투표_재개">투표 재개</option>
-                        <option value="투표_삭제">투표 삭제</option>
-                        <option value="경기_결과기록">경기 결과 기록</option>
-                        <option value="경기_결과수정">경기 결과 수정</option>
-                        <option value="경기_수정">경기 수정</option>
-                        <option value="경기_추가">경기 추가</option>
-                        <option value="친선경기_기록">친선 경기 기록</option>
-                        <option value="폴더_생성">폴더 생성</option>
-                        <option value="폴더_수정">폴더 수정</option>
-                        <option value="폴더_삭제">폴더 삭제</option>
-                        <option value="친선경기_폴더담기">친선 경기 폴더 담기</option>
-                        <option value="친선경기_폴더빼기">친선 경기 폴더 빼기</option>
-                        <option value="멤버_강퇴">멤버 강퇴</option>
-                        <option value="역할_변경">역할 변경</option>
+                        <option value="" data-i18n="groupDetail.filterAll">전체</option>
+                        <option value="투표_종료" data-i18n="groupDetail.action.pollClose">투표 종료</option>
+                        <option value="투표_재개" data-i18n="groupDetail.action.pollReopen">투표 재개</option>
+                        <option value="투표_삭제" data-i18n="groupDetail.action.pollDelete">투표 삭제</option>
+                        <option value="경기_결과기록" data-i18n="groupDetail.action.matchRecord">경기 결과 기록</option>
+                        <option value="경기_결과수정" data-i18n="groupDetail.action.matchResultEdit">경기 결과 수정</option>
+                        <option value="경기_수정" data-i18n="groupDetail.action.matchEdit">경기 수정</option>
+                        <option value="경기_추가" data-i18n="groupDetail.action.matchAdd">경기 추가</option>
+                        <option value="친선경기_기록" data-i18n="groupDetail.action.friendlyRecord">친선 경기 기록</option>
+                        <option value="폴더_생성" data-i18n="groupDetail.action.folderCreate">폴더 생성</option>
+                        <option value="폴더_수정" data-i18n="groupDetail.action.folderEdit">폴더 수정</option>
+                        <option value="폴더_삭제" data-i18n="groupDetail.action.folderDelete">폴더 삭제</option>
+                        <option value="친선경기_폴더담기" data-i18n="groupDetail.action.folderAssign">친선 경기 폴더 담기</option>
+                        <option value="친선경기_폴더빼기" data-i18n="groupDetail.action.folderRemove">친선 경기 폴더 빼기</option>
+                        <option value="멤버_강퇴" data-i18n="groupDetail.action.memberKick">멤버 강퇴</option>
+                        <option value="역할_변경" data-i18n="groupDetail.action.roleChange">역할 변경</option>
                     </select>
                     <button class="btn-cancel btn-modal-close" data-modal="modal-activity-log">&#10005;</button>
                 </div>
             </div>
             <div id="activity-log-list" class="activity-log-modal-body">
-                <p class="loading-msg">불러오는 중...</p>
+                <p class="loading-msg" data-i18n="common.loading">불러오는 중...</p>
             </div>
         </div>
     </div>
@@ -144,9 +152,9 @@
 
             <!-- 헤더 -->
             <div class="lb-modal-header">
-                <h3 class="lb-modal-title">순위표</h3>
+                <h3 class="lb-modal-title" data-i18n="groupDetail.leaderboardTitle">순위표</h3>
                 <div class="lb-modal-actions">
-                    <button id="btn-settings-toggle" class="btn-settings-toggle hidden">⚙ 승점 설정</button>
+                    <button id="btn-settings-toggle" class="btn-settings-toggle hidden" data-i18n="groupDetail.ptsSettingsToggle">⚙ 승점 설정</button>
                     <button class="btn-modal-close btn-cancel" data-modal="modal-leaderboard">&#10005;</button>
                 </div>
             </div>
@@ -155,31 +163,31 @@
             <div id="lb-settings-panel" class="lb-settings-panel hidden">
                 <div class="lb-settings-grid">
                     <div class="lb-settings-item">
-                        <span class="lb-settings-label">승리</span>
+                        <span class="lb-settings-label" data-i18n="groupDetail.win">승리</span>
                         <input type="number" id="input-pts-win" class="pts-input" min="0" max="99" value="3">
-                        <span class="pts-unit">점</span>
+                        <span class="pts-unit" data-i18n="groupDetail.pointsUnit">점</span>
                     </div>
                     <div class="lb-settings-item">
-                        <span class="lb-settings-label">무승부</span>
+                        <span class="lb-settings-label" data-i18n="groupDetail.drawLabel">무승부</span>
                         <input type="number" id="input-pts-draw" class="pts-input" min="0" max="99" value="2">
-                        <span class="pts-unit">점</span>
+                        <span class="pts-unit" data-i18n="groupDetail.pointsUnit">점</span>
                     </div>
                     <div class="lb-settings-item">
-                        <span class="lb-settings-label">패배</span>
+                        <span class="lb-settings-label" data-i18n="groupDetail.loss">패배</span>
                         <input type="number" id="input-pts-loss" class="pts-input" min="0" max="99" value="1">
-                        <span class="pts-unit">점</span>
+                        <span class="pts-unit" data-i18n="groupDetail.pointsUnit">점</span>
                     </div>
                 </div>
                 <div class="lb-settings-footer">
                     <p id="settings-msg" class="settings-msg"></p>
-                    <button id="btn-save-pts" class="btn-save-pts">저장</button>
+                    <button id="btn-save-pts" class="btn-save-pts" data-i18n="common.save">저장</button>
                 </div>
             </div>
 
             <!-- 승점 규칙 + 테이블 -->
             <p id="pts-rule-label" class="pts-rule-label">승 3점 · 무 2점 · 패 1점</p>
             <div id="lb-content">
-                <p class="loading-msg" style="text-align:center">불러오는 중...</p>
+                <p class="loading-msg" style="text-align:center" data-i18n="common.loading">불러오는 중...</p>
             </div>
 
         </div>
@@ -189,30 +197,30 @@
     <div id="modal-create-poll" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">매치 투표 생성</h3>
+            <h3 class="modal-title" data-i18n="groupDetail.createPollTitle">매치 투표 생성</h3>
             <div class="form-group">
-                <label for="input-poll-title">투표명</label>
+                <label for="input-poll-title" data-i18n="groupDetail.pollNameLabel">투표명</label>
                 <input type="text" id="input-poll-title" class="form-input"
-                       placeholder="예: 6월 5주차 정기전" maxlength="50">
+                       placeholder="예: 6월 5주차 정기전" data-i18n-placeholder="groupDetail.pollNamePlaceholder" maxlength="50">
             </div>
             <div class="form-group">
-                <label>경기 유형</label>
+                <label data-i18n="groupDetail.matchTypeLabel">경기 유형</label>
                 <div class="match-type-toggle">
                     <label class="match-type-option">
                         <input type="radio" name="poll-match-type" value="official" checked>
-                        <span>공식 경기</span>
+                        <span data-i18n="groupDetail.officialMatch">공식 경기</span>
                     </label>
                     <label class="match-type-option">
                         <input type="radio" name="poll-match-type" value="friendly">
-                        <span>친선 경기</span>
+                        <span data-i18n="groupDetail.friendlyMatch">친선 경기</span>
                     </label>
                 </div>
-                <p class="match-type-desc">공식 경기만 순위표 승점에 반영됩니다.</p>
+                <p class="match-type-desc" data-i18n="groupDetail.matchTypeDesc">공식 경기만 순위표 승점에 반영됩니다.</p>
             </div>
             <p id="create-poll-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-create-poll" class="btn-primary">생성</button>
-                <button class="btn-cancel" data-modal="modal-create-poll">취소</button>
+                <button id="btn-confirm-create-poll" class="btn-primary" data-i18n="groupDetail.create">생성</button>
+                <button class="btn-cancel" data-modal="modal-create-poll" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -221,16 +229,16 @@
     <div id="modal-result" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">경기 결과 기록</h3>
+            <h3 class="modal-title" data-i18n="groupDetail.recordResultTitle">경기 결과 기록</h3>
             <p id="result-match-label" class="result-match-label">-</p>
             <div class="result-buttons">
                 <button id="btn-p1-win" class="btn-result btn-result-win">-</button>
-                <button id="btn-draw" class="btn-result btn-result-draw">무승부</button>
+                <button id="btn-draw" class="btn-result btn-result-draw" data-i18n="common.draw">무승부</button>
                 <button id="btn-p2-win" class="btn-result btn-result-win">-</button>
             </div>
             <p id="result-error" class="form-error"></p>
             <div class="modal-buttons" style="margin-top:0.75rem">
-                <button class="btn-cancel" data-modal="modal-result">취소</button>
+                <button class="btn-cancel" data-modal="modal-result" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -239,16 +247,16 @@
     <div id="modal-pgn-edit" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">기보 추가/수정</h3>
+            <h3 class="modal-title" data-i18n="groupDetail.pgnEditTitle">기보 추가/수정</h3>
             <div class="form-group">
-                <label for="input-pgn">PGN 기보</label>
+                <label for="input-pgn" data-i18n="groupDetail.pgnLabel">PGN 기보</label>
                 <textarea id="input-pgn" class="form-input pgn-textarea"
                           placeholder="[Event &quot;...&quot;]&#10;&#10;1. e4 e5 2. Nf3 Nc6 ..." rows="8"></textarea>
             </div>
             <p id="pgn-edit-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-pgn" class="btn-primary">저장</button>
-                <button class="btn-cancel" data-modal="modal-pgn-edit">취소</button>
+                <button id="btn-confirm-pgn" class="btn-primary" data-i18n="common.save">저장</button>
+                <button class="btn-cancel" data-modal="modal-pgn-edit" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -258,23 +266,23 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-lg modal-pgn-viewer">
             <div class="lb-modal-header">
-                <h3 class="lb-modal-title" id="pgn-viewer-title">기보 재생</h3>
+                <h3 class="lb-modal-title" id="pgn-viewer-title" data-i18n="groupDetail.pgnViewerTitle">기보 재생</h3>
                 <button class="btn-modal-close btn-cancel" data-modal="modal-pgn-viewer">&#10005;</button>
             </div>
             <div class="pgn-viewer-body">
                 <div class="pgn-board-wrap">
-                    <div id="pgn-player-black" class="pgn-player pgn-player-black">⬛ 흑: -</div>
+                    <div id="pgn-player-black" class="pgn-player pgn-player-black">⬛ -</div>
                     <div id="pgn-board"></div>
-                    <div id="pgn-player-white" class="pgn-player pgn-player-white">⬜ 백: -</div>
+                    <div id="pgn-player-white" class="pgn-player pgn-player-white">⬜ -</div>
                 </div>
                 <div class="pgn-controls">
-                    <button id="pgn-btn-first" class="pgn-nav-btn" title="처음으로">&#8676;</button>
-                    <button id="pgn-btn-prev"  class="pgn-nav-btn" title="이전">&#9664;</button>
+                    <button id="pgn-btn-first" class="pgn-nav-btn" title="처음으로" data-i18n-title="groupDetail.pgnFirst">&#8676;</button>
+                    <button id="pgn-btn-prev"  class="pgn-nav-btn" title="이전" data-i18n-title="groupDetail.pgnPrev">&#9664;</button>
                     <span id="pgn-move-counter" class="pgn-move-counter">0 / 0</span>
-                    <button id="pgn-btn-next"  class="pgn-nav-btn" title="다음">&#9654;</button>
-                    <button id="pgn-btn-last"  class="pgn-nav-btn" title="끝으로">&#8677;</button>
+                    <button id="pgn-btn-next"  class="pgn-nav-btn" title="다음" data-i18n-title="groupDetail.pgnNext">&#9654;</button>
+                    <button id="pgn-btn-last"  class="pgn-nav-btn" title="끝으로" data-i18n-title="groupDetail.pgnLast">&#8677;</button>
                     <span class="pgn-controls-divider"></span>
-                    <button id="pgn-btn-flip"  class="pgn-nav-btn pgn-btn-flip" title="판 돌리기">&#8645;</button>
+                    <button id="pgn-btn-flip"  class="pgn-nav-btn pgn-btn-flip" title="판 돌리기" data-i18n-title="groupDetail.flipBoard">&#8645;</button>
                 </div>
                 <div id="pgn-move-list" class="pgn-move-list"></div>
             </div>
@@ -286,17 +294,17 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <div class="lb-modal-header">
-                <h3 class="lb-modal-title">그룹 설정</h3>
+                <h3 class="lb-modal-title" data-i18n="groupDetail.groupSettingsTitle">그룹 설정</h3>
                 <button class="btn-modal-close btn-cancel" data-modal="modal-group-settings">&#10005;</button>
             </div>
 
             <!-- 대진 설정 -->
             <div class="gs-section">
-                <h4 class="gs-section-title">대진 설정</h4>
+                <h4 class="gs-section-title" data-i18n="groupDetail.matchSettingsHeading">대진 설정</h4>
                 <div class="gs-toggle-row">
                     <div class="toggle-info">
-                        <span class="toggle-title">흑/백 자동 배정</span>
-                        <span class="toggle-desc">대진 생성 시 흑/백을 무작위 배정합니다</span>
+                        <span class="toggle-title" data-i18n="groupDetail.colorAutoTitle">흑/백 자동 배정</span>
+                        <span class="toggle-desc" data-i18n="groupDetail.colorAutoDesc">대진 생성 시 흑/백을 무작위 배정합니다</span>
                     </div>
                     <label class="toggle-switch">
                         <input type="checkbox" id="gs-input-color-auto" checked>
@@ -308,9 +316,9 @@
 
             <!-- 위험 구역 (방장 전용) -->
             <div class="gs-section gs-danger-section hidden" id="gs-danger-zone">
-                <h4 class="gs-section-title gs-danger-title">위험 구역</h4>
-                <p class="gs-danger-desc">그룹을 삭제하면 모든 매치·투표·멤버 데이터가 영구 삭제됩니다.</p>
-                <button id="btn-open-delete-group" class="btn-danger-outline">그룹 삭제</button>
+                <h4 class="gs-section-title gs-danger-title" data-i18n="groupDetail.dangerZone">위험 구역</h4>
+                <p class="gs-danger-desc" data-i18n="groupDetail.dangerZoneDesc">그룹을 삭제하면 모든 매치·투표·멤버 데이터가 영구 삭제됩니다.</p>
+                <button id="btn-open-delete-group" class="btn-danger-outline" data-i18n="groupDetail.deleteGroup">그룹 삭제</button>
             </div>
         </div>
     </div>
@@ -319,15 +327,15 @@
     <div id="modal-delete-group" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title modal-title-danger">그룹 삭제</h3>
-            <p class="modal-warning-text">
+            <h3 class="modal-title modal-title-danger" data-i18n="groupDetail.deleteGroupTitle">그룹 삭제</h3>
+            <p class="modal-warning-text" data-i18n-html="groupDetail.deleteGroupWarning">
                 이 작업은 <strong>되돌릴 수 없습니다.</strong><br>
                 모든 매치 기록, 투표, 멤버 데이터가 영구 삭제됩니다.
             </p>
             <p id="delete-group-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-delete-group" class="btn-danger">삭제 확인</button>
-                <button class="btn-cancel" data-modal="modal-delete-group">취소</button>
+                <button id="btn-confirm-delete-group" class="btn-danger" data-i18n="groupDetail.deleteConfirm">삭제 확인</button>
+                <button class="btn-cancel" data-modal="modal-delete-group" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -337,11 +345,11 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-lg">
             <div class="lb-modal-header">
-                <h3 class="lb-modal-title">공지사항</h3>
+                <h3 class="lb-modal-title" data-i18n="groupDetail.announcementListTitle">공지사항</h3>
                 <button class="btn-modal-close btn-cancel" data-modal="modal-announcement-list">&#10005;</button>
             </div>
             <div id="announcement-list-content">
-                <p class="loading-msg" style="text-align:center">불러오는 중...</p>
+                <p class="loading-msg" style="text-align:center" data-i18n="common.loading">불러오는 중...</p>
             </div>
         </div>
     </div>
@@ -350,21 +358,21 @@
     <div id="modal-create-announcement" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">공지 작성</h3>
+            <h3 class="modal-title" data-i18n="groupDetail.writeAnnouncementTitle">공지 작성</h3>
             <div class="form-group">
-                <label for="input-announcement-title">제목</label>
+                <label for="input-announcement-title" data-i18n="groupDetail.titleLabel">제목</label>
                 <input type="text" id="input-announcement-title" class="form-input"
-                       placeholder="공지 제목" maxlength="100">
+                       placeholder="공지 제목" data-i18n-placeholder="groupDetail.announcementTitlePlaceholder" maxlength="100">
             </div>
             <div class="form-group">
-                <label for="input-announcement-content">내용</label>
+                <label for="input-announcement-content" data-i18n="groupDetail.contentLabel">내용</label>
                 <textarea id="input-announcement-content" class="form-input announcement-textarea"
-                          placeholder="공지 내용을 입력하세요" rows="6"></textarea>
+                          placeholder="공지 내용을 입력하세요" data-i18n-placeholder="groupDetail.announcementContentPlaceholder" rows="6"></textarea>
             </div>
             <p id="create-announcement-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-create-announcement" class="btn-primary">등록</button>
-                <button class="btn-cancel" data-modal="modal-create-announcement">취소</button>
+                <button id="btn-confirm-create-announcement" class="btn-primary" data-i18n="groupDetail.register">등록</button>
+                <button class="btn-cancel" data-modal="modal-create-announcement" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -373,31 +381,31 @@
     <div id="modal-edit-match" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">경기 수정</h3>
+            <h3 class="modal-title" data-i18n="groupDetail.editMatchTitle">경기 수정</h3>
             <div class="edit-match-players">
                 <div class="form-group edit-player-group">
-                    <label>백 (White)</label>
+                    <label data-i18n="groupDetail.whiteLabel">백 (White)</label>
                     <select id="edit-player1" class="form-input"></select>
                 </div>
-                <button id="btn-swap-players" class="btn-swap" title="백/흑 교체">⇄</button>
+                <button id="btn-swap-players" class="btn-swap" title="백/흑 교체" data-i18n-title="groupDetail.swapColors">⇄</button>
                 <div class="form-group edit-player-group">
-                    <label>흑 (Black)</label>
+                    <label data-i18n="groupDetail.blackLabel">흑 (Black)</label>
                     <select id="edit-player2" class="form-input"></select>
                 </div>
             </div>
             <div class="form-group">
-                <label>결과</label>
+                <label data-i18n="groupDetail.resultLabel">결과</label>
                 <div class="edit-result-options">
-                    <button class="btn-edit-result" data-result="p1_win" id="btn-edit-p1-win">백 승</button>
-                    <button class="btn-edit-result" data-result="draw">무승부</button>
-                    <button class="btn-edit-result" data-result="p2_win" id="btn-edit-p2-win">흑 승</button>
-                    <button class="btn-edit-result" data-result="none">미입력</button>
+                    <button class="btn-edit-result" data-result="p1_win" id="btn-edit-p1-win" data-i18n="groupDetail.whiteWin">백 승</button>
+                    <button class="btn-edit-result" data-result="draw" data-i18n="common.draw">무승부</button>
+                    <button class="btn-edit-result" data-result="p2_win" id="btn-edit-p2-win" data-i18n="groupDetail.blackWin">흑 승</button>
+                    <button class="btn-edit-result" data-result="none" data-i18n="groupDetail.notEntered">미입력</button>
                 </div>
             </div>
             <p id="edit-match-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-edit-match" class="btn-primary">저장</button>
-                <button class="btn-cancel" data-modal="modal-edit-match">취소</button>
+                <button id="btn-confirm-edit-match" class="btn-primary" data-i18n="common.save">저장</button>
+                <button class="btn-cancel" data-modal="modal-edit-match" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -407,9 +415,9 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content modal-lg">
             <div class="lb-modal-header">
-                <h3 class="lb-modal-title">친선 경기 폴더</h3>
+                <h3 class="lb-modal-title" data-i18n="groupDetail.friendlyFoldersTitle">친선 경기 폴더</h3>
                 <div class="lb-modal-actions">
-                    <button id="btn-folder-manage-toggle" class="btn-settings-toggle hidden">⚙ 폴더 관리</button>
+                    <button id="btn-folder-manage-toggle" class="btn-settings-toggle hidden" data-i18n="groupDetail.manageFolders">⚙ 폴더 관리</button>
                     <button class="btn-modal-close btn-cancel" data-modal="modal-friendly-folders">&#10005;</button>
                 </div>
             </div>
@@ -418,27 +426,27 @@
             <div id="folder-manage-panel" class="folder-manage-panel hidden">
                 <div class="folder-new-row">
                     <input type="text" id="input-new-folder-name" class="form-input"
-                           placeholder="새 폴더 이름" maxlength="50">
-                    <button id="btn-create-folder" class="btn-primary">폴더 생성</button>
+                           placeholder="새 폴더 이름" data-i18n-placeholder="groupDetail.newFolderPlaceholder" maxlength="50">
+                    <button id="btn-create-folder" class="btn-primary" data-i18n="groupDetail.createFolder">폴더 생성</button>
                 </div>
                 <p id="folder-manage-error" class="form-error"></p>
 
                 <div class="folder-assign-row">
                     <select id="select-assign-folder" class="form-input">
-                        <option value="">폴더 선택...</option>
+                        <option value="" data-i18n="groupDetail.selectFolderPlaceholder">폴더 선택...</option>
                     </select>
-                    <button id="btn-assign-to-folder" class="btn-folder-action">선택 항목 담기</button>
-                    <button id="btn-remove-from-folder" class="btn-folder-action btn-folder-remove">선택 항목 빼기</button>
+                    <button id="btn-assign-to-folder" class="btn-folder-action" data-i18n="groupDetail.assignToFolder">선택 항목 담기</button>
+                    <button id="btn-remove-from-folder" class="btn-folder-action btn-folder-remove" data-i18n="groupDetail.removeFromFolder">선택 항목 빼기</button>
                 </div>
 
                 <div id="folder-manage-match-list" class="folder-manage-match-list">
-                    <p class="loading-msg" style="text-align:left">불러오는 중...</p>
+                    <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
                 </div>
             </div>
 
             <!-- 폴더 뷰 (아코디언) -->
             <div id="folder-view-content">
-                <p class="loading-msg" style="text-align:center">불러오는 중...</p>
+                <p class="loading-msg" style="text-align:center" data-i18n="common.loading">불러오는 중...</p>
             </div>
         </div>
     </div>
@@ -447,36 +455,52 @@
     <div id="modal-friendly-match" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">친선 경기 직접 기록</h3>
-            <p class="match-type-desc" style="margin-top:-0.5rem">투표 없이 즉시 기록되며, 순위표 승점에는 반영되지 않습니다.</p>
+            <h3 class="modal-title" data-i18n="groupDetail.recordFriendlyMatchTitle">친선 경기 직접 기록</h3>
+            <p class="match-type-desc" style="margin-top:-0.5rem" data-i18n="groupDetail.friendlyMatchDesc">투표 없이 즉시 기록되며, 순위표 승점에는 반영되지 않습니다.</p>
             <div class="edit-match-players">
                 <div class="form-group edit-player-group">
-                    <label>백 (White)</label>
+                    <label data-i18n="groupDetail.whiteLabel">백 (White)</label>
                     <select id="friendly-player1" class="form-input"></select>
                 </div>
-                <button id="btn-swap-friendly-players" class="btn-swap" title="백/흑 교체">⇄</button>
+                <button id="btn-swap-friendly-players" class="btn-swap" title="백/흑 교체" data-i18n-title="groupDetail.swapColors">⇄</button>
                 <div class="form-group edit-player-group">
-                    <label>흑 (Black)</label>
+                    <label data-i18n="groupDetail.blackLabel">흑 (Black)</label>
                     <select id="friendly-player2" class="form-input"></select>
                 </div>
             </div>
             <div class="form-group">
-                <label>결과</label>
+                <label data-i18n="groupDetail.resultLabel">결과</label>
                 <div class="edit-result-options">
-                    <button class="btn-friendly-result" data-result="p1_win" id="btn-friendly-p1-win">백 승</button>
-                    <button class="btn-friendly-result" data-result="draw">무승부</button>
-                    <button class="btn-friendly-result" data-result="p2_win" id="btn-friendly-p2-win">흑 승</button>
+                    <button class="btn-friendly-result" data-result="p1_win" id="btn-friendly-p1-win" data-i18n="groupDetail.whiteWin">백 승</button>
+                    <button class="btn-friendly-result" data-result="draw" data-i18n="common.draw">무승부</button>
+                    <button class="btn-friendly-result" data-result="p2_win" id="btn-friendly-p2-win" data-i18n="groupDetail.blackWin">흑 승</button>
                 </div>
             </div>
             <div class="form-group">
-                <label for="input-friendly-note">메모 (선택)</label>
+                <label for="input-friendly-note" data-i18n="groupDetail.noteLabel">메모 (선택)</label>
                 <textarea id="input-friendly-note" class="form-input" rows="2" maxlength="500"
-                          placeholder="예: 점심시간 번개전"></textarea>
+                          placeholder="예: 점심시간 번개전" data-i18n-placeholder="groupDetail.notePlaceholder"></textarea>
             </div>
             <p id="friendly-match-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-friendly-match" class="btn-primary">기록</button>
-                <button class="btn-cancel" data-modal="modal-friendly-match">취소</button>
+                <button id="btn-confirm-friendly-match" class="btn-primary" data-i18n="groupDetail.record">기록</button>
+                <button class="btn-cancel" data-modal="modal-friendly-match" data-i18n="common.cancel">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 멤버 프로필 모달 ===== -->
+    <div id="modal-user-profile" class="modal hidden" role="dialog" aria-modal="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="lb-modal-header">
+                <h3 class="lb-modal-title" data-i18n="groupDetail.memberProfileTitle">멤버 프로필</h3>
+                <div class="lb-modal-actions">
+                    <button class="btn-modal-close btn-cancel" data-modal="modal-user-profile">&#10005;</button>
+                </div>
+            </div>
+            <div id="profile-modal-content">
+                <p class="loading-msg" style="text-align:center" data-i18n="common.loading">불러오는 중...</p>
             </div>
         </div>
     </div>
@@ -484,6 +508,11 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next@23/dist/umd/i18next.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-http-backend@2/i18nextHttpBackend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-browser-languagedetector@7/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../css/i18n-init.js"></script>
+    <script src="../css/theme-toggle.js"></script>
     <script src="group_detail.js"></script>
 </body>
 

@@ -77,30 +77,30 @@ function updateStatus() {
     statusEl.className   = 'game-status';
 
     if (game.in_checkmate()) {
-        var winner = game.turn() === 'w' ? '흑' : '백';
-        turnText.textContent = winner + ' 승리!';
+        var winner = game.turn() === 'w' ? t('practice.black') : t('practice.white');
+        turnText.textContent = winner + ' ' + t('practice.win');
         turnDot.className    = 'turn-dot ' + (game.turn() === 'w' ? 'black' : 'white');
-        statusEl.textContent = '체크메이트';
+        statusEl.textContent = t('practice.checkmate');
         statusEl.className   = 'game-status checkmate';
         return;
     }
 
     if (game.in_draw()) {
-        turnText.textContent = '무승부';
+        turnText.textContent = t('common.draw');
         turnDot.className    = 'turn-dot draw';
-        statusEl.textContent = game.in_stalemate() ? '스테일메이트'
-                             : game.insufficient_material() ? '기물 부족'
-                             : '50수 규칙 또는 3회 반복';
+        statusEl.textContent = game.in_stalemate() ? t('practice.stalemate')
+                             : game.insufficient_material() ? t('practice.insufficientMaterial')
+                             : t('practice.fiftyMoveRule');
         statusEl.className   = 'game-status draw';
         return;
     }
 
     var isWhite = game.turn() === 'w';
     turnDot.className    = 'turn-dot ' + (isWhite ? 'white' : 'black');
-    turnText.textContent = (isWhite ? '백' : '흑') + '의 차례';
+    turnText.textContent = isWhite ? t('practice.whiteTurn') : t('practice.blackTurn');
 
     if (game.in_check()) {
-        statusEl.textContent = '체크!';
+        statusEl.textContent = t('practice.check');
         statusEl.className   = 'game-status check';
     }
 }
@@ -112,7 +112,7 @@ function renderHistory() {
     var history = game.history();
 
     if (!history.length) {
-        el.innerHTML = '<p class="history-empty">아직 수가 없습니다.</p>';
+        el.innerHTML = '<p class="history-empty">' + t('practice.noMoves') + '</p>';
         return;
     }
 

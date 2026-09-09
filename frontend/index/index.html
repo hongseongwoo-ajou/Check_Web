@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <script src="../css/theme-init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
@@ -9,25 +10,37 @@
 </head>
 <body>
     <header>
-        <h1>♟ 체스 동아리</h1>
-        <p class="subtitle">Chess Club Management</p>
+        <div class="theme-toggle-corner">
+            <div class="lang-switcher">
+                <button class="lang-btn" data-lang="ko">한</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+            </div>
+            <button id="theme-toggle" class="theme-toggle-btn" title="테마 전환">🌙</button>
+        </div>
+        <h1>♟ <span data-i18n="common.appName">체스 동아리</span></h1>
+        <p class="subtitle" data-i18n="index.subtitle">Chess Club Management</p>
     </header>
 
     <main>
         <section class="status-card">
-            <h2>서버 상태</h2>
-            <p id="server-status">확인 중...</p>
+            <h2 data-i18n="index.serverStatusTitle">서버 상태</h2>
+            <p id="server-status" data-i18n="index.checking">확인 중...</p>
         </section>
 
         <section class="nav-card">
-            <a href="../login/login.html" class="btn">로그인</a>
+            <a href="../login/login.html" class="btn" data-i18n="index.loginButton">로그인</a>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2026 체스 동아리</p>
+        <p data-i18n="index.footer">&copy; 2026 체스 동아리</p>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/i18next@23/dist/umd/i18next.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-http-backend@2/i18nextHttpBackend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-browser-languagedetector@7/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../css/i18n-init.js"></script>
+    <script src="../css/theme-toggle.js"></script>
     <script src="index.js"></script>
 </body>
 </html>

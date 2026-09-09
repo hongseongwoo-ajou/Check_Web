@@ -26,7 +26,9 @@ async function apiFetch(path, options = {}) {
         });
 
         if (res.status === 401) {
-            localStorage.clear();
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            localStorage.removeItem('nickname');
             window.location.href = '../login/login.html';
             return null;
         }
@@ -71,7 +73,7 @@ async function loadGroups() {
     const emptyMsg = document.getElementById('groups-empty');
 
     if (!result.ok) {
-        emptyMsg.textContent = '그룹 목록을 불러오지 못했습니다.';
+        emptyMsg.textContent = t('lobby.groupsLoadError');
         return;
     }
 
@@ -94,9 +96,9 @@ function createGroupCard(group) {
         <div class="group-info">
             <span class="group-name">${escapeHtml(group.name)}</span>
             <div class="group-meta">
-                <span>방장: ${escapeHtml(group.owner_nickname)}</span>
-                <span>멤버 ${group.member_count}명</span>
-                <span>초대 코드: <code class="invite-code">${escapeHtml(group.invite_code)}</code></span>
+                <span>${t('lobby.ownerLabel')} ${escapeHtml(group.owner_nickname)}</span>
+                <span>${t('lobby.memberCountLabel', { count: group.member_count })}</span>
+                <span>${t('lobby.inviteCodeShortLabel')} <code class="invite-code">${escapeHtml(group.invite_code)}</code></span>
             </div>
         </div>
         <span class="group-arrow">&#8594;</span>
@@ -122,13 +124,13 @@ document.getElementById('btn-confirm-create').addEventListener('click', async ()
     errorEl.textContent = '';
 
     if (!name) {
-        errorEl.textContent = '그룹 이름을 입력해주세요.';
+        errorEl.textContent = t('lobby.groupNameRequired');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-create');
     btn.disabled    = true;
-    btn.textContent = '생성 중...';
+    btn.textContent = t('lobby.creating');
 
     try {
         const result = await apiFetch('/api/groups', {
@@ -138,7 +140,7 @@ document.getElementById('btn-confirm-create').addEventListener('click', async ()
         if (!result) return;
 
         if (!result.ok) {
-            errorEl.textContent = result.data.detail || '그룹 생성에 실패했습니다.';
+            errorEl.textContent = result.data.detail || t('lobby.groupCreateFailed');
             return;
         }
 
@@ -146,7 +148,7 @@ document.getElementById('btn-confirm-create').addEventListener('click', async ()
         await loadGroups();
     } finally {
         btn.disabled    = false;
-        btn.textContent = '만들기';
+        btn.textContent = t('lobby.createSubmit');
     }
 });
 
@@ -169,13 +171,13 @@ document.getElementById('btn-confirm-join').addEventListener('click', async () =
     errorEl.textContent = '';
 
     if (!inviteCode) {
-        errorEl.textContent = '초대 코드를 입력해주세요.';
+        errorEl.textContent = t('lobby.inviteCodeRequired');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-join');
     btn.disabled    = true;
-    btn.textContent = '참가 중...';
+    btn.textContent = t('lobby.joining');
 
     try {
         const result = await apiFetch('/api/groups/join', {
@@ -185,7 +187,7 @@ document.getElementById('btn-confirm-join').addEventListener('click', async () =
         if (!result) return;
 
         if (!result.ok) {
-            errorEl.textContent = result.data.detail || '그룹 참가에 실패했습니다.';
+            errorEl.textContent = result.data.detail || t('lobby.groupJoinFailed');
             return;
         }
 
@@ -193,7 +195,7 @@ document.getElementById('btn-confirm-join').addEventListener('click', async () =
         await loadGroups();
     } finally {
         btn.disabled    = false;
-        btn.textContent = '참가';
+        btn.textContent = t('lobby.joinSubmit');
     }
 });
 
@@ -204,7 +206,9 @@ document.getElementById('input-invite-code').addEventListener('keydown', (e) => 
 // ===== 로그아웃 =====
 
 document.getElementById('btn-logout').addEventListener('click', () => {
-    localStorage.clear();
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('nickname');
     window.location.href = '../login/login.html';
 });
 

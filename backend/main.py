@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, Header, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -18,6 +19,7 @@ import json
 import os
 import re
 import contextlib
+import concurrent.futures
 
 _origins_env = os.environ.get("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = _origins_env.split(",") if _origins_env else ["*"]
@@ -31,6 +33,60 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="체스 동아리 API", version="0.2.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+_VALIDATION_FIELD_LABELS = {
+    "username": "아이디", "nickname": "이름",
+    "password": "비밀번호", "new_password": "새 비밀번호", "current_password": "현재 비밀번호",
+    "title": "제목", "content": "내용", "note": "메모",
+    "chess_username": "Chess.com 아이디", "name": "이름",
+    "pts_win": "승리 승점", "pts_draw": "무승부 승점", "pts_loss": "패배 승점",
+}
+
+
+def _josa(word: str, with_batchim: str, without_batchim: str) -> str:
+    """한글 단어 끝 받침 유무에 따라 올바른 조사(은/는, 을/를 등)를 붙여 반환."""
+    if not word:
+        return without_batchim
+    last = word[-1]
+    if "가" <= last <= "힣":
+        has_batchim = (ord(last) - ord("가")) % 28 != 0
+        return with_batchim if has_batchim else without_batchim
+    return without_batchim  # 영문 등은 기본형 사용
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Pydantic 검증 실패 시 FastAPI 기본 응답은 detail이 배열([{type, loc, msg, ...}])이라
+    프론트에서 문자열로 그대로 출력하면 '[object Object]'가 뜬다.
+    사람이 읽을 수 있는 한 줄 문자열로 변환해 내려준다.
+    """
+    first = exc.errors()[0]
+    field = str(first["loc"][-1]) if first.get("loc") else ""
+    label = _VALIDATION_FIELD_LABELS.get(field, field or "입력값")
+    eun_neun = _josa(label, "은", "는")
+    eul_reul = _josa(label, "을", "를")
+
+    err_type = first.get("type", "")
+    ctx = first.get("ctx", {})
+    if err_type == "string_too_short":
+        detail = f"{label}{eun_neun} {ctx.get('min_length')}자 이상이어야 합니다."
+    elif err_type == "string_too_long":
+        detail = f"{label}{eun_neun} {ctx.get('max_length')}자 이하여야 합니다."
+    elif err_type == "greater_than_equal":
+        detail = f"{label}{eun_neun} {ctx.get('ge')} 이상이어야 합니다."
+    elif err_type == "less_than_equal":
+        detail = f"{label}{eun_neun} {ctx.get('le')} 이하여야 합니다."
+    elif err_type == "greater_than":
+        detail = f"{label}{eun_neun} {ctx.get('gt')}보다 커야 합니다."
+    elif err_type == "less_than":
+        detail = f"{label}{eun_neun} {ctx.get('lt')}보다 작아야 합니다."
+    elif err_type == "missing":
+        detail = f"{label}{eul_reul} 입력해주세요."
+    else:
+        detail = f"{label} 값이 올바르지 않습니다."
+
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 @app.get("/health")
@@ -204,6 +260,15 @@ def init_db():
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chess_rating_cache (
+                user_id        INTEGER PRIMARY KEY,
+                data           TEXT    NOT NULL,
+                months_fetched INTEGER NOT NULL DEFAULT 0,
+                fetched_at     TEXT    NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
         conn.commit()
 
 
@@ -316,6 +381,26 @@ def migrate_db():
         except Exception:
             pass
 
+        # chess_rating_cache 테이블이 없는 기존 DB에 생성
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chess_rating_cache (
+                    user_id        INTEGER PRIMARY KEY,
+                    data           TEXT    NOT NULL,
+                    months_fetched INTEGER NOT NULL DEFAULT 0,
+                    fetched_at     TEXT    NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE chess_rating_cache ADD COLUMN months_fetched INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # 이미 존재하는 컬럼 — 정상
+
         # 기존 그룹 방장에게 '방장' 역할 부여
         try:
             conn.execute("""
@@ -424,12 +509,81 @@ def update_user_rating(user_id: int, chess_username: str):
         conn.commit()
 
 
+CHESS_TREND_CACHE_TTL_SECONDS = 3600
+CHESS_TREND_MAX_MONTHS = 60  # 최대 5년치 월간 아카이브까지만 조회 (응답 속도·API 호출 수 보호)
+
+PERIOD_TO_DAYS   = {"7d": 7, "30d": 30, "1y": 365, "all": None}
+# 기간별로 실제 필요한 최소 아카이브 개월 수(여유분 포함) — 짧은 기간 조회 시 불필요하게
+# 전체 기록을 긁어오지 않도록 캐시를 필요한 만큼만 점진적으로 채운다.
+PERIOD_TO_MONTHS = {"7d": 2, "30d": 2, "1y": 13, "all": CHESS_TREND_MAX_MONTHS}
+
+
+def fetch_chess_rating_trend(chess_username: str, max_months: int = CHESS_TREND_MAX_MONTHS) -> list:
+    """
+    Chess.com 월별 게임 아카이브(pubapi)를 순회하며 래피드(rapid) 경기 종료 시점의
+    레이팅을 모아, 하루 단위(그 날 마지막 경기 기준)로 집계한
+    [{"date": "YYYY-MM-DD", "rating": N}, ...] 리스트를 오름차순으로 반환.
+    실패 시 빈 리스트 반환.
+    """
+    username_lower = chess_username.lower()
+    archives_url = f"https://api.chess.com/pub/player/{username_lower}/games/archives"
+    req = urllib.request.Request(archives_url, headers={"User-Agent": CHESS_COM_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            archive_urls = json.loads(resp.read()).get("archives", [])
+    except Exception as e:
+        print(f"[Chess.com] 아카이브 목록 조회 실패 - {chess_username}: {e}", flush=True)
+        return []
+
+    archive_urls = archive_urls[-max_months:]  # 최신 월부터 max_months개만 사용
+
+    def _fetch_month(url: str) -> list:
+        req = urllib.request.Request(url, headers={"User-Agent": CHESS_COM_USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read()).get("games", [])
+        except Exception as e:
+            print(f"[Chess.com] 월간 아카이브 조회 실패 - {url}: {e}", flush=True)
+            return []
+
+    # 월별 아카이브는 서로 독립적인 요청이므로 스레드풀로 동시에 가져와 응답 시간을 단축
+    all_games = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        for games in pool.map(_fetch_month, archive_urls):
+            all_games.extend(games)
+
+    daily_last = {}  # date_str -> (end_time, rating)
+    for g in all_games:
+        if g.get("time_class") != "rapid":
+            continue
+        end_time = g.get("end_time")
+        if not end_time:
+            continue
+
+        white, black = g.get("white", {}), g.get("black", {})
+        if white.get("username", "").lower() == username_lower:
+            rating = white.get("rating")
+        elif black.get("username", "").lower() == username_lower:
+            rating = black.get("rating")
+        else:
+            continue
+        if rating is None:
+            continue
+
+        date_str = datetime.fromtimestamp(end_time, tz=timezone.utc).astimezone(KST).strftime("%Y-%m-%d")
+        existing = daily_last.get(date_str)
+        if not existing or end_time > existing[0]:
+            daily_last[date_str] = (end_time, rating)
+
+    return [{"date": d, "rating": v[1]} for d, v in sorted(daily_last.items())]
+
+
 # ---------- 스키마 ----------
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=30)
+    username: str = Field(min_length=3, max_length=20)
     nickname: str = Field(min_length=1, max_length=20)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=4, max_length=128)
 
 
 class LoginRequest(BaseModel):
@@ -455,9 +609,9 @@ class CreatePollRequest(BaseModel):
 
 
 class GroupSettingsRequest(BaseModel):
-    pts_win:            int
-    pts_draw:           int
-    pts_loss:           int
+    pts_win:            int = Field(ge=0, le=99)
+    pts_draw:           int = Field(ge=0, le=99)
+    pts_loss:           int = Field(ge=0, le=99)
     is_color_automatic: bool = True
 
 
@@ -507,7 +661,7 @@ class UpdateProfileRequest(BaseModel):
 
 class UpdatePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=4, max_length=128)
 
 
 class UpdateMemberRoleRequest(BaseModel):
@@ -535,8 +689,6 @@ async def root():
 async def register(req: RegisterRequest):
     if not USERNAME_RE.match(req.username):
         raise HTTPException(status_code=400, detail="아이디는 영문, 숫자, 한글, 밑줄(_)만 사용할 수 있습니다.")
-    if len(req.password) < 8:
-        raise HTTPException(status_code=400, detail="비밀번호는 8자 이상이어야 합니다.")
 
     try:
         with get_db() as conn:
@@ -610,6 +762,89 @@ async def get_me(user=Depends(get_current_user)):
     }
 
 
+@app.get("/api/me/stats")
+async def get_my_stats(user=Depends(get_current_user)):
+    """
+    로그인한 사용자의 전체(모든 그룹, 공식+친선) 경기 데이터를 집계해
+    마이페이지 통계 대시보드에 필요한 지표를 반환.
+    """
+    uid = user["id"]
+    with get_db() as conn:
+        matches = conn.execute(
+            """SELECT id, player1_id, player2_id, winner_id, played_at, is_official
+               FROM matches
+               WHERE status = 'finished' AND (player1_id = ? OR player2_id = ?)
+               ORDER BY played_at DESC, id DESC""",
+            (uid, uid),
+        ).fetchall()
+
+        played = len(matches)
+        wins   = sum(1 for m in matches if m["winner_id"] == uid)
+        draws  = sum(1 for m in matches if m["winner_id"] is None)
+        losses = played - wins - draws
+        win_rate = round(wins / played * 100, 1) if played else 0.0
+
+        # ---- 라이벌 전적: 상대별 전적을 집계해 대결 횟수 상위 5명 ----
+        rival_stats = {}
+        for m in matches:
+            opp_id = m["player2_id"] if m["player1_id"] == uid else m["player1_id"]
+            s = rival_stats.setdefault(opp_id, {"played": 0, "wins": 0, "draws": 0, "losses": 0})
+            s["played"] += 1
+            if m["winner_id"] == uid:
+                s["wins"] += 1
+            elif m["winner_id"] is None:
+                s["draws"] += 1
+            else:
+                s["losses"] += 1
+
+        rival_ids = sorted(rival_stats, key=lambda k: (-rival_stats[k]["played"], k))[:5]
+        nicknames = {}
+        if rival_ids:
+            placeholders = ",".join("?" for _ in rival_ids)
+            nicknames = {
+                row["id"]: row["nickname"]
+                for row in conn.execute(
+                    f"SELECT id, nickname FROM users WHERE id IN ({placeholders})",
+                    rival_ids,
+                ).fetchall()
+            }
+        rivals = [
+            {"id": rid, "nickname": nicknames.get(rid, "알 수 없음"), **rival_stats[rid]}
+            for rid in rival_ids
+        ]
+
+        # ---- 최근 폼: 최근 10경기, 오래된 -> 최신 순으로 반환 ----
+        recent_form = []
+        for m in reversed(matches[:10]):
+            opp_id = m["player2_id"] if m["player1_id"] == uid else m["player1_id"]
+            opp_nick = nicknames.get(opp_id)
+            if opp_nick is None:
+                row = conn.execute("SELECT nickname FROM users WHERE id = ?", (opp_id,)).fetchone()
+                opp_nick = row["nickname"] if row else "알 수 없음"
+            if m["winner_id"] == uid:
+                result = "win"
+            elif m["winner_id"] is None:
+                result = "draw"
+            else:
+                result = "loss"
+            recent_form.append({
+                "match_id": m["id"],
+                "result": result,
+                "opponent_nickname": opp_nick,
+                "played_at": m["played_at"],
+                "is_official": bool(m["is_official"]),
+            })
+
+    return {
+        "summary": {
+            "played": played, "wins": wins, "draws": draws, "losses": losses,
+            "win_rate": win_rate,
+        },
+        "rivals": rivals,
+        "recent_form": recent_form,
+    }
+
+
 @app.patch("/api/me/profile")
 async def update_profile(req: UpdateProfileRequest, user=Depends(get_current_user)):
     nickname = req.nickname.strip()
@@ -672,6 +907,70 @@ async def refresh_chess_rating(user=Depends(get_current_user)):
     }
 
 
+@app.get("/api/me/chess/rating-trend")
+async def get_my_rating_trend(period: str = "30d", refresh: bool = False, user=Depends(get_current_user)):
+    """
+    Chess.com 실제 대국 기록(래피드)에서 레이팅 추이를 뽑아 기간별로 반환.
+    전체 기간 데이터는 그룹당 1시간 캐시하고, period 파라미터로 그 중 일부만 잘라 응답.
+    """
+    if period not in PERIOD_TO_DAYS:
+        raise HTTPException(status_code=400, detail="period는 7d, 30d, 1y, all 중 하나여야 합니다.")
+
+    chess_username = user["chess_username"]
+    if not chess_username:
+        raise HTTPException(status_code=400, detail="Chess.com 계정이 연동되어 있지 않습니다.")
+
+    required_months = PERIOD_TO_MONTHS[period]
+
+    with get_db() as conn:
+        cache = conn.execute(
+            "SELECT data, fetched_at, months_fetched FROM chess_rating_cache WHERE user_id = ?",
+            (user["id"],),
+        ).fetchone()
+
+        is_fresh = False
+        if cache:
+            try:
+                age = (now_kst() - datetime.fromisoformat(cache["fetched_at"])).total_seconds()
+                is_fresh = age <= CHESS_TREND_CACHE_TTL_SECONDS
+            except Exception:
+                is_fresh = False
+
+        cached_months = cache["months_fetched"] if cache else 0
+        need_fetch = refresh or not cache or not is_fresh or cached_months < required_months
+
+        if need_fetch:
+            # 캐시가 신선한데 기간만 부족하면 필요한 만큼만 확장, 그 외엔 이번 기간에 필요한 만큼만 새로 조회
+            months_to_fetch = max(required_months, cached_months) if is_fresh else required_months
+            points = fetch_chess_rating_trend(chess_username, months_to_fetch)
+            fetched_at = now_kst().isoformat(timespec="seconds")
+            conn.execute(
+                """INSERT INTO chess_rating_cache (user_id, data, months_fetched, fetched_at)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                       data = excluded.data,
+                       months_fetched = excluded.months_fetched,
+                       fetched_at = excluded.fetched_at""",
+                (user["id"], json.dumps(points), months_to_fetch, fetched_at),
+            )
+            conn.commit()
+        else:
+            points = json.loads(cache["data"])
+            fetched_at = cache["fetched_at"]
+
+    days = PERIOD_TO_DAYS[period]
+    if days is not None:
+        cutoff = (now_kst() - timedelta(days=days)).strftime("%Y-%m-%d")
+        points = [p for p in points if p["date"] >= cutoff]
+
+    return {
+        "chess_username": chess_username,
+        "period": period,
+        "points": points,
+        "fetched_at": fetched_at,
+    }
+
+
 @app.patch("/api/me/chess")
 async def update_chess_username(
     req: UpdateChessRequest,
@@ -689,6 +988,8 @@ async def update_chess_username(
             "UPDATE users SET chess_username = ? WHERE id = ?",
             (chess_username, user["id"]),
         )
+        # 계정을 바꾼 경우 이전 아이디 기준으로 캐시된 레이팅 추이가 남아있지 않도록 초기화
+        conn.execute("DELETE FROM chess_rating_cache WHERE user_id = ?", (user["id"],))
         conn.commit()
 
     # 연동 즉시 레이팅 갱신 (1시간 제한 없이)
@@ -788,6 +1089,9 @@ async def delete_group(group_id: int, user=Depends(get_current_user)):
         )
         conn.execute("DELETE FROM matches WHERE group_id = ?", (group_id,))
         conn.execute("DELETE FROM polls WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM match_folders WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM announcements WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM activity_logs WHERE group_id = ?", (group_id,))
         conn.execute("DELETE FROM user_groups WHERE group_id = ?", (group_id,))
         conn.execute("DELETE FROM group_settings WHERE group_id = ?", (group_id,))
         conn.execute("DELETE FROM groups WHERE id = ?", (group_id,))
@@ -1241,6 +1545,39 @@ async def toggle_vote(poll_id: int, user=Depends(get_current_user)):
     return {"voted": voted}
 
 
+@app.delete("/api/polls/{poll_id}/votes/{user_id}")
+async def cancel_member_vote(poll_id: int, user_id: int, user=Depends(get_current_user)):
+    """방장/임원이 진행 중인 투표에서 특정 참가자의 투표를 강제로 취소."""
+    with get_db() as conn:
+        poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
+        if not poll:
+            raise HTTPException(status_code=404, detail="투표를 찾을 수 없습니다.")
+        if poll["status"] != "voting":
+            raise HTTPException(status_code=400, detail="투표 중인 상태에서만 참가자의 투표를 취소할 수 있습니다.")
+
+        _check_admin(conn, user["id"], poll["group_id"])  # 방장/임원만 가능
+
+        existing = conn.execute(
+            "SELECT 1 FROM poll_votes WHERE poll_id = ? AND user_id = ?",
+            (poll_id, user_id),
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="해당 참가자의 투표 기록이 없습니다.")
+
+        target = conn.execute("SELECT nickname FROM users WHERE id = ?", (user_id,)).fetchone()
+        target_nick = target["nickname"] if target else f"#{user_id}"
+
+        conn.execute(
+            "DELETE FROM poll_votes WHERE poll_id = ? AND user_id = ?",
+            (poll_id, user_id),
+        )
+        _log(conn, poll["group_id"], user["id"], "투표_취소",
+             f"'{poll['title'] or '투표'}' - {target_nick}님의 투표를 취소함")
+        conn.commit()
+
+    return {"message": f"{target_nick}님의 투표가 취소되었습니다."}
+
+
 @app.post("/api/polls/{poll_id}/close")
 async def close_poll(poll_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
@@ -1666,6 +2003,93 @@ async def get_leaderboard(group_id: int, user=Depends(get_current_user)):
         "current_role": current_role,
         "settings": {"pts_win": pts_win, "pts_draw": pts_draw, "pts_loss": pts_loss, "is_color_automatic": is_color_automatic},
         "standings": standings,
+    }
+
+
+@app.get("/api/groups/{group_id}/members/{member_id}/profile")
+async def get_member_profile(group_id: int, member_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+
+        member = conn.execute(
+            """SELECT u.id, u.nickname, u.chess_username, u.rating_rapid, u.rating_updated_at, ug.role
+               FROM users u
+               JOIN user_groups ug ON u.id = ug.user_id
+               WHERE ug.group_id = ? AND u.id = ?""",
+            (group_id, member_id),
+        ).fetchone()
+        if not member:
+            raise HTTPException(status_code=404, detail="해당 그룹의 멤버가 아닙니다.")
+
+        s = conn.execute(
+            "SELECT pts_win, pts_draw, pts_loss FROM group_settings WHERE group_id = ?",
+            (group_id,),
+        ).fetchone()
+        pts_win  = s["pts_win"]  if s else 3
+        pts_draw = s["pts_draw"] if s else 2
+        pts_loss = s["pts_loss"] if s else 1
+
+        results = conn.execute(
+            """SELECT winner_id FROM matches
+               WHERE group_id = ? AND status = 'finished' AND is_official = 1
+                 AND (player1_id = ? OR player2_id = ?)""",
+            (group_id, member_id, member_id),
+        ).fetchall()
+        played = len(results)
+        wins   = sum(1 for r in results if r["winner_id"] == member_id)
+        draws  = sum(1 for r in results if r["winner_id"] is None)
+        losses = played - wins - draws
+        points = wins * pts_win + draws * pts_draw + losses * pts_loss
+
+        recent_matches = conn.execute(
+            """SELECT m.id, m.played_at, m.is_official, m.note,
+                      p1.id AS player1_id, p1.nickname AS player1_nickname,
+                      p2.id AS player2_id, p2.nickname AS player2_nickname,
+                      w.id AS winner_id, w.nickname AS winner_nickname
+               FROM matches m
+               JOIN users p1 ON m.player1_id = p1.id
+               JOIN users p2 ON m.player2_id = p2.id
+               LEFT JOIN users w ON m.winner_id = w.id
+               WHERE m.group_id = ? AND m.status = 'finished'
+                 AND (m.player1_id = ? OR m.player2_id = ?)
+               ORDER BY m.played_at DESC
+               LIMIT 10""",
+            (group_id, member_id, member_id),
+        ).fetchall()
+
+        head_to_head = None
+        if member_id != user["id"]:
+            h2h = conn.execute(
+                """SELECT winner_id FROM matches
+                   WHERE group_id = ? AND status = 'finished'
+                     AND ((player1_id = ? AND player2_id = ?) OR (player1_id = ? AND player2_id = ?))""",
+                (group_id, member_id, user["id"], user["id"], member_id),
+            ).fetchall()
+            h2h_played     = len(h2h)
+            h2h_member_win = sum(1 for r in h2h if r["winner_id"] == member_id)
+            h2h_draws      = sum(1 for r in h2h if r["winner_id"] is None)
+            h2h_my_wins    = h2h_played - h2h_member_win - h2h_draws
+            head_to_head = {
+                "played": h2h_played,
+                "my_wins": h2h_my_wins,
+                "draws": h2h_draws,
+                "member_wins": h2h_member_win,
+            }
+
+    return {
+        "id": member["id"],
+        "nickname": member["nickname"],
+        "chess_username": member["chess_username"],
+        "rating_rapid": member["rating_rapid"],
+        "rating_updated_at": member["rating_updated_at"],
+        "role": member["role"],
+        "record": {"played": played, "wins": wins, "draws": draws, "losses": losses, "points": points},
+        "recent_matches": [dict(m) for m in recent_matches],
+        "head_to_head": head_to_head,
     }
 
 

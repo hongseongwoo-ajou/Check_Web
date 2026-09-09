@@ -2,59 +2,77 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <script src="../css/theme-init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>로그인 — 체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
     <link rel="stylesheet" href="login.css">
 </head>
 <body>
+
+    <!-- 저장된 로그인 세션 확인 중 오버레이 -->
+    <div id="page-loader" class="page-loader">
+        <div class="spinner"></div>
+        <p class="page-loader-text" data-i18n="auth.checkingSession">로그인 확인 중...</p>
+    </div>
+
     <header>
-        <a href="../index/index.html" class="back-link">← 홈으로</a>
-        <h1>♟ 체스 동아리</h1>
+        <a href="../index/index.html" class="back-link" data-i18n="common.backHome">← 홈으로</a>
+        <h1>♟ <span data-i18n="common.appName">체스 동아리</span></h1>
+        <div class="lang-switcher" style="margin-left:auto">
+            <button class="lang-btn" data-lang="ko">한</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <button id="theme-toggle" class="theme-toggle-btn" title="테마 전환">🌙</button>
     </header>
 
     <main>
         <div class="auth-card">
             <div class="tab-group">
-                <button class="tab active" data-tab="login">로그인</button>
-                <button class="tab" data-tab="register">회원가입</button>
+                <button class="tab active" data-tab="login" data-i18n="auth.loginTab">로그인</button>
+                <button class="tab" data-tab="register" data-i18n="auth.registerTab">회원가입</button>
             </div>
 
             <!-- 로그인 폼 -->
             <form id="login-form" class="auth-form">
                 <div class="field">
-                    <label for="login-username">아이디</label>
-                    <input type="text" id="login-username" placeholder="아이디를 입력하세요" required>
+                    <label for="login-username" data-i18n="auth.usernameLabel">아이디</label>
+                    <input type="text" id="login-username" placeholder="아이디를 입력하세요" data-i18n-placeholder="auth.usernamePlaceholder" required>
                 </div>
                 <div class="field">
-                    <label for="login-password">비밀번호</label>
-                    <input type="password" id="login-password" placeholder="비밀번호를 입력하세요" required>
+                    <label for="login-password" data-i18n="auth.passwordLabel">비밀번호</label>
+                    <input type="password" id="login-password" placeholder="비밀번호를 입력하세요" data-i18n-placeholder="auth.passwordPlaceholder" required>
                 </div>
                 <p class="error-msg" id="login-error"></p>
-                <button type="submit" class="btn-submit">로그인</button>
+                <button type="submit" class="btn-submit" data-i18n="auth.loginSubmit">로그인</button>
             </form>
 
             <!-- 회원가입 폼 -->
             <form id="register-form" class="auth-form hidden">
                 <div class="field">
-                    <label for="reg-username">아이디</label>
-                    <input type="text" id="reg-username" placeholder="아이디를 입력하세요" required>
+                    <label for="reg-username" data-i18n="auth.usernameLabel">아이디</label>
+                    <input type="text" id="reg-username" placeholder="아이디를 입력하세요 (3~20자)" data-i18n-placeholder="auth.usernamePlaceholderReg" required>
                 </div>
                 <div class="field">
-                    <label for="reg-nickname">이름</label>
-                    <input type="text" id="reg-nickname" placeholder="이름을 입력하세요" required>
+                    <label for="reg-nickname" data-i18n="auth.nicknameLabel">이름</label>
+                    <input type="text" id="reg-nickname" placeholder="이름을 입력하세요" data-i18n-placeholder="auth.nicknamePlaceholder" required>
                 </div>
                 <div class="field">
-                    <label for="reg-password">비밀번호</label>
-                    <input type="password" id="reg-password" placeholder="비밀번호를 입력하세요" required>
+                    <label for="reg-password" data-i18n="auth.passwordLabel">비밀번호</label>
+                    <input type="password" id="reg-password" placeholder="비밀번호를 입력하세요 (4자 이상)" data-i18n-placeholder="auth.passwordPlaceholderReg" required>
                 </div>
                 <p class="error-msg" id="register-error"></p>
                 <p class="success-msg" id="register-success"></p>
-                <button type="submit" class="btn-submit">회원가입</button>
+                <button type="submit" class="btn-submit" data-i18n="auth.registerSubmit">회원가입</button>
             </form>
         </div>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/i18next@23/dist/umd/i18next.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-http-backend@2/i18nextHttpBackend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-browser-languagedetector@7/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../css/i18n-init.js"></script>
+    <script src="../css/theme-toggle.js"></script>
     <script src="login.js"></script>
 </body>
 </html>

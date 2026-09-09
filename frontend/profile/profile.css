@@ -15,6 +15,12 @@
     letter-spacing: 0.03em;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
 .btn-back {
     font-size: 0.85rem;
     color: var(--color-text-muted);
@@ -45,7 +51,7 @@
 
 /* ===== 메인 ===== */
 .profile-main {
-    max-width: 620px;
+    max-width: 880px;
     margin: 2.5rem auto;
     padding: 0 1.5rem 4rem;
     display: flex;
@@ -112,7 +118,7 @@
 
 .field-readonly {
     padding: 0.65rem 0.9rem;
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(var(--overlay-rgb), 0.03);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     color: var(--color-text-muted);
@@ -191,8 +197,8 @@
     margin: 0;
 }
 
-.status-msg.success { color: #6fcf97; }
-.status-msg.error   { color: #e07070; }
+.status-msg.success { color: var(--color-success); }
+.status-msg.error   { color: var(--color-danger); }
 
 .btn-row {
     display: flex;
@@ -229,7 +235,215 @@
 .btn-outline:hover    { background: var(--color-primary); color: #1a1a2e; }
 .btn-outline:disabled { opacity: 0.5; cursor: default; }
 
+/* ===== 통계 로딩/빈 상태 ===== */
+.stats-loading,
+.stats-empty {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    padding: 0.5rem 0;
+}
+
+/* ===== 종합 전적 요약 ===== */
+.stats-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.7rem;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.9rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+
+.stat-box-label {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.stat-box-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text);
+    font-family: 'Courier New', monospace;
+}
+
+.stat-box.win-rate .stat-box-value  { color: var(--color-primary); }
+.stat-box.wins     .stat-box-value  { color: var(--color-success); }
+.stat-box.draws    .stat-box-value  { color: var(--color-info); }
+.stat-box.losses   .stat-box-value  { color: var(--color-danger); }
+
+/* ===== 레이팅 변화 추이 ===== */
+.chart-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.card-heading.no-border {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.period-tabs {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.period-tab {
+    padding: 0.3rem 0.7rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.period-tab:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+}
+
+.period-tab.active {
+    background: var(--color-primary);
+    color: #1a1a2e;
+    border-color: var(--color-primary);
+}
+
+.rating-chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 220px;
+}
+
+.rating-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.rating-chart-wrap .stats-loading,
+.rating-chart-wrap .stats-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 1.5rem;
+    margin: 0;
+}
+
+/* ===== 최근 폼 ===== */
+.recent-form-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.form-badge {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    cursor: default;
+}
+
+.form-badge.win  { background: var(--color-success); }
+.form-badge.draw { background: var(--color-info); }
+.form-badge.loss { background: var(--color-danger); }
+
+.form-badge-arrow {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+/* ===== 주요 라이벌 전적 ===== */
+.rivals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rival-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.8rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+
+.rival-rank {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    width: 1.2rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.rival-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rival-played {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.rival-record {
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
+    font-family: 'Courier New', monospace;
+}
+
+.rival-record .r-win  { color: var(--color-success); }
+.rival-record .r-draw { color: var(--color-info); }
+.rival-record .r-loss { color: var(--color-danger); }
+
 /* ===== 반응형 ===== */
+@media (max-width: 640px) {
+    .stats-summary-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .rival-row {
+        flex-wrap: wrap;
+    }
+}
+
 @media (max-width: 540px) {
     .profile-main {
         margin: 1.5rem auto;

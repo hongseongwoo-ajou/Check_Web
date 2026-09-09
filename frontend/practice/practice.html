@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <script src="../css/theme-init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>체스 연습 - 체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
@@ -13,9 +14,15 @@
 <body>
 
     <header class="practice-header">
-        <a href="../lobby/lobby.html" class="btn-back">&#8592; 로비로 돌아가기</a>
+        <a href="../lobby/lobby.html" class="btn-back" data-i18n="common.backToLobby">&#8592; 로비로 돌아가기</a>
         <div class="header-logo">♟ Chess Club</div>
-        <span class="header-placeholder"></span>
+        <span class="header-placeholder">
+            <div class="lang-switcher">
+                <button class="lang-btn" data-lang="ko">한</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+            </div>
+            <button id="theme-toggle" class="theme-toggle-btn" title="테마 전환">🌙</button>
+        </span>
     </header>
 
     <main class="practice-main">
@@ -25,9 +32,9 @@
             <section class="board-section">
                 <div id="practice-board" class="practice-board"></div>
                 <div class="board-controls">
-                    <button id="btn-reset" class="ctrl-btn ctrl-btn-reset">&#8635; 초기화</button>
-                    <button id="btn-undo"  class="ctrl-btn ctrl-btn-undo">&#8592; 무르기</button>
-                    <button id="btn-flip"  class="ctrl-btn ctrl-btn-flip">&#8645; 판 돌리기</button>
+                    <button id="btn-reset" class="ctrl-btn ctrl-btn-reset" data-i18n="practice.resetButton">&#8635; 초기화</button>
+                    <button id="btn-undo"  class="ctrl-btn ctrl-btn-undo" data-i18n="practice.undoButton">&#8592; 무르기</button>
+                    <button id="btn-flip"  class="ctrl-btn ctrl-btn-flip" data-i18n="practice.flipButton">&#8645; 판 돌리기</button>
                 </div>
             </section>
 
@@ -36,15 +43,15 @@
                 <div class="status-card">
                     <div id="turn-indicator" class="turn-indicator">
                         <span id="turn-dot" class="turn-dot white"></span>
-                        <span id="turn-text">백의 차례</span>
+                        <span id="turn-text" data-i18n="practice.whiteTurn">백의 차례</span>
                     </div>
                     <p id="game-status" class="game-status"></p>
                 </div>
 
                 <div class="history-card">
-                    <h2 class="history-heading">수순</h2>
+                    <h2 class="history-heading" data-i18n="practice.moveHistoryHeading">수순</h2>
                     <div id="move-history" class="move-history">
-                        <p class="history-empty">아직 수가 없습니다.</p>
+                        <p class="history-empty" data-i18n="practice.noMoves">아직 수가 없습니다.</p>
                     </div>
                 </div>
             </aside>
@@ -55,6 +62,11 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next@23/dist/umd/i18next.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-http-backend@2/i18nextHttpBackend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-browser-languagedetector@7/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../css/i18n-init.js"></script>
+    <script src="../css/theme-toggle.js"></script>
     <script src="practice.js"></script>
 </body>
 

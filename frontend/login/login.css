@@ -119,13 +119,13 @@ main {
 }
 
 .error-msg {
-    color: #f44336;
+    color: var(--color-danger);
     font-size: 0.85rem;
     min-height: 1.2em;
 }
 
 .success-msg {
-    color: #4caf50;
+    color: var(--color-success);
     font-size: 0.85rem;
     min-height: 1.2em;
 }

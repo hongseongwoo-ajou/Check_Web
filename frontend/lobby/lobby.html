@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <script src="../css/theme-init.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>로비 - 체스 동아리</title>
     <link rel="stylesheet" href="../css/global.css">
@@ -14,10 +15,15 @@
     <header class="lobby-header">
         <div class="header-logo">♟ Chess Club</div>
         <div class="header-user">
-            <span class="welcome-msg">안녕하세요, <strong id="user-nickname">-</strong>님</span>
-            <a href="../practice/practice.html" class="btn-practice">♟ 체스판</a>
-            <a href="../profile/profile.html" class="btn-profile">내 정보</a>
-            <button id="btn-logout" class="btn-logout">로그아웃</button>
+            <span class="welcome-msg"><span data-i18n="lobby.welcomePrefix">안녕하세요,</span> <strong id="user-nickname">-</strong><span data-i18n="lobby.welcomeSuffix">님</span></span>
+            <a href="../practice/practice.html" class="btn-practice" data-i18n="common.practiceBoard">♟ 체스판</a>
+            <a href="../profile/profile.html" class="btn-profile" data-i18n="common.myInfo">내 정보</a>
+            <div class="lang-switcher">
+                <button class="lang-btn" data-lang="ko">한</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+            </div>
+            <button id="theme-toggle" class="theme-toggle-btn" title="테마 전환">🌙</button>
+            <button id="btn-logout" class="btn-logout" data-i18n="common.logout">로그아웃</button>
         </div>
     </header>
 
@@ -26,18 +32,18 @@
         <!-- 액션 버튼 -->
         <section class="lobby-actions">
             <button id="btn-create-group" class="btn-action btn-primary">
-                <span class="btn-icon">+</span> 그룹 생성
+                <span class="btn-icon">+</span> <span data-i18n="lobby.createGroup">그룹 생성</span>
             </button>
             <button id="btn-join-group" class="btn-action btn-secondary">
-                <span class="btn-icon">&#8594;</span> 그룹 참가
+                <span class="btn-icon">&#8594;</span> <span data-i18n="lobby.joinGroup">그룹 참가</span>
             </button>
         </section>
 
         <!-- 그룹 목록 -->
         <section class="groups-section">
-            <h2 class="section-title">내 그룹</h2>
+            <h2 class="section-title" data-i18n="lobby.myGroups">내 그룹</h2>
             <div id="groups-list" class="groups-list">
-                <p class="empty-msg" id="groups-empty">가입된 그룹이 없습니다.</p>
+                <p class="empty-msg" id="groups-empty" data-i18n="lobby.noGroups">가입된 그룹이 없습니다.</p>
             </div>
         </section>
     </main>
@@ -46,15 +52,15 @@
     <div id="modal-create" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">그룹 생성</h3>
+            <h3 class="modal-title" data-i18n="lobby.createGroupTitle">그룹 생성</h3>
             <div class="form-group">
-                <label for="input-group-name">그룹 이름</label>
-                <input type="text" id="input-group-name" placeholder="그룹 이름을 입력하세요" maxlength="30">
+                <label for="input-group-name" data-i18n="lobby.groupNameLabel">그룹 이름</label>
+                <input type="text" id="input-group-name" placeholder="그룹 이름을 입력하세요" data-i18n-placeholder="lobby.groupNamePlaceholder" maxlength="30">
             </div>
             <p id="create-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-create" class="btn-primary">만들기</button>
-                <button class="btn-cancel" data-modal="modal-create">취소</button>
+                <button id="btn-confirm-create" class="btn-primary" data-i18n="lobby.createSubmit">만들기</button>
+                <button class="btn-cancel" data-modal="modal-create" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
@@ -63,19 +69,24 @@
     <div id="modal-join" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title">그룹 참가</h3>
+            <h3 class="modal-title" data-i18n="lobby.joinGroupTitle">그룹 참가</h3>
             <div class="form-group">
-                <label for="input-invite-code">초대 코드</label>
-                <input type="text" id="input-invite-code" placeholder="초대 코드 8자리 입력" maxlength="8">
+                <label for="input-invite-code" data-i18n="lobby.inviteCodeLabel">초대 코드</label>
+                <input type="text" id="input-invite-code" placeholder="초대 코드 8자리 입력" data-i18n-placeholder="lobby.inviteCodePlaceholder" maxlength="8">
             </div>
             <p id="join-error" class="form-error"></p>
             <div class="modal-buttons">
-                <button id="btn-confirm-join" class="btn-primary">참가</button>
-                <button class="btn-cancel" data-modal="modal-join">취소</button>
+                <button id="btn-confirm-join" class="btn-primary" data-i18n="lobby.joinSubmit">참가</button>
+                <button class="btn-cancel" data-modal="modal-join" data-i18n="common.cancel">취소</button>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/i18next@23/dist/umd/i18next.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-http-backend@2/i18nextHttpBackend.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/i18next-browser-languagedetector@7/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../css/i18n-init.js"></script>
+    <script src="../css/theme-toggle.js"></script>
     <script src="lobby.js"></script>
 </body>
 

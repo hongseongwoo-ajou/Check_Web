@@ -64,14 +64,16 @@ async function apiFetch(path, options = {}) {
             },
         });
         if (res.status === 401) {
-            localStorage.clear();
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            localStorage.removeItem('nickname');
             window.location.href = '../login/login.html';
             return null;
         }
         const data = await res.json();
         return { ok: res.ok, status: res.status, data };
     } catch {
-        return { ok: false, status: 0, data: { detail: '서버에 연결할 수 없습니다.' } };
+        return { ok: false, status: 0, data: { detail: t('auth.serverUnreachable') } };
     }
 }
 
@@ -83,22 +85,33 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
+function playerLink(id, nickname) {
+    if (!id) return escapeHtml(nickname);
+    return `<button type="button" class="player-link" data-user-id="${id}">${escapeHtml(nickname)}</button>`;
+}
+
 function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
         const d = new Date(dateStr.replace(' ', 'T') + (dateStr.includes('T') ? '' : 'Z'));
-        return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+        const locale = (typeof i18next !== 'undefined' && i18next.resolvedLanguage === 'en') ? 'en-US' : 'ko-KR';
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     } catch {
         return dateStr.slice(0, 10);
     }
+}
+
+// 무승부/승자 표시를 한 번에 처리하는 헬퍼 (winnerHtml은 playerLink()/escapeHtml() 결과 등 이미 안전한 HTML)
+function resultLabel(isDraw, winnerHtml) {
+    return isDraw ? t('common.draw') : t('groupDetail.winnerAnnounce', { name: winnerHtml });
 }
 
 const isAdmin = () => currentRole === '방장' || currentRole === '임원';
 
 function matchTypeBadge(isOfficial) {
     return isOfficial
-        ? '<span class="official-badge official">공식</span>'
-        : '<span class="official-badge friendly">친선</span>';
+        ? `<span class="official-badge official">${t('common.official')}</span>`
+        : `<span class="official-badge friendly">${t('common.friendly')}</span>`;
 }
 
 // ===== PGN 유효성 검사 (chess.js) =====
@@ -119,7 +132,7 @@ function renderMembers(members) {
     listEl.innerHTML = '';
 
     if (!members.length) {
-        listEl.innerHTML = '<li class="loading-msg">멤버가 없습니다.</li>';
+        listEl.innerHTML = `<li class="loading-msg">${t('groupDetail.noMembers')}</li>`;
         return;
     }
 
@@ -137,9 +150,9 @@ function renderMembers(members) {
         let roleBtn = '';
         if (isOwner && !isSelf && m.role !== '방장') {
             if (m.role === '임원') {
-                roleBtn = `<button class="btn-role btn-demote" data-member-id="${m.id}" data-new-role="회원" title="임원 해임">해임</button>`;
+                roleBtn = `<button class="btn-role btn-demote" data-member-id="${m.id}" data-new-role="회원" title="${t('groupDetail.demoteOfficer')}">${t('groupDetail.demote')}</button>`;
             } else {
-                roleBtn = `<button class="btn-role btn-promote" data-member-id="${m.id}" data-new-role="임원" title="임원 임명">임명</button>`;
+                roleBtn = `<button class="btn-role btn-promote" data-member-id="${m.id}" data-new-role="임원" title="${t('groupDetail.promoteOfficer')}">${t('groupDetail.promote')}</button>`;
             }
         }
 
@@ -149,14 +162,14 @@ function renderMembers(members) {
             (currentRole === '임원' && m.role === '회원')
         );
         const kickBtn = canKick
-            ? `<button class="btn-kick" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}" title="강퇴">강퇴</button>`
+            ? `<button class="btn-kick" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}" title="${t('groupDetail.kick')}">${t('groupDetail.kick')}</button>`
             : '';
 
         const li = document.createElement('li');
         li.className = `member-item${isSelf ? ' me' : ''}${!hasRating ? ' unlinked' : ''}`;
         li.innerHTML = `
-            <span class="member-name">${escapeHtml(m.nickname)}${roleBadge}</span>
-            <span class="member-rating">${hasRating ? `(${m.rating_rapid})` : '(미연동)'}</span>
+            <span class="member-name">${playerLink(m.id, m.nickname)}${roleBadge}</span>
+            <span class="member-rating">${hasRating ? `(${m.rating_rapid})` : `(${t('groupDetail.notLinked')})`}</span>
             ${roleBtn}${kickBtn}
         `;
         listEl.appendChild(li);
@@ -179,10 +192,12 @@ function renderMembers(members) {
 
 async function changeMemberRole(memberId, newRole) {
     const member      = currentMembers.find(m => m.id === memberId);
-    const memberName  = member ? escapeHtml(member.nickname) : '해당 멤버';
-    const actionLabel = newRole === '임원' ? '임원으로 임명' : '임원에서 해임';
+    const displayName = member?.nickname ?? t('groupDetail.thatMember');
+    const confirmMsg  = newRole === '임원'
+        ? t('groupDetail.confirmPromote', { name: displayName })
+        : t('groupDetail.confirmDemote', { name: displayName });
 
-    if (!confirm(`${member?.nickname ?? '해당 멤버'}님을 ${actionLabel}하시겠습니까?`)) return;
+    if (!confirm(confirmMsg)) return;
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}/role`, {
         method: 'PATCH',
@@ -192,12 +207,12 @@ async function changeMemberRole(memberId, newRole) {
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || '역할 변경에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.roleChangeFailed'));
     }
 }
 
 async function kickMember(memberId, memberName) {
-    if (!confirm(`${memberName}님을 그룹에서 강퇴하시겠습니까?`)) return;
+    if (!confirm(t('groupDetail.confirmKick', { name: memberName }))) return;
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}`, {
         method: 'DELETE',
@@ -206,7 +221,7 @@ async function kickMember(memberId, memberName) {
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || '강퇴에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.kickFailed'));
     }
 }
 
@@ -225,14 +240,14 @@ function renderLatestAnnouncement(ann) {
     if (!ann) {
         el.innerHTML = `
             <div class="announcement-row">
-                <h3 class="announcement-title announcement-empty">등록된 공지사항이 없습니다.</h3>
-                <button id="btn-view-all-announcements" class="btn-view-all-announcements">전체보기</button>
+                <h3 class="announcement-title announcement-empty">${t('groupDetail.noAnnouncements')}</h3>
+                <button id="btn-view-all-announcements" class="btn-view-all-announcements">${t('groupDetail.viewAll')}</button>
             </div>`;
     } else {
         el.innerHTML = `
             <div class="announcement-row">
                 <h3 class="announcement-title">${escapeHtml(ann.title)}</h3>
-                <button id="btn-view-all-announcements" class="btn-view-all-announcements">전체보기</button>
+                <button id="btn-view-all-announcements" class="btn-view-all-announcements">${t('groupDetail.viewAll')}</button>
             </div>
             <p class="announcement-content">${escapeHtml(ann.content)}</p>`;
     }
@@ -255,17 +270,17 @@ document.getElementById('btn-confirm-create-announcement').addEventListener('cli
     errorEl.textContent = '';
 
     if (!title) {
-        errorEl.textContent = '제목을 입력해주세요.';
+        errorEl.textContent = t('groupDetail.titleRequired');
         return;
     }
     if (!content) {
-        errorEl.textContent = '내용을 입력해주세요.';
+        errorEl.textContent = t('groupDetail.contentRequired');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-create-announcement');
     btn.disabled = true;
-    btn.textContent = '등록 중...';
+    btn.textContent = t('groupDetail.registering');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}/announcements`, {
@@ -276,25 +291,25 @@ document.getElementById('btn-confirm-create-announcement').addEventListener('cli
             document.getElementById('modal-create-announcement').classList.add('hidden');
             await loadLatestAnnouncement();
         } else {
-            errorEl.textContent = result?.data?.detail || '등록에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.registerFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '등록';
+        btn.textContent = t('groupDetail.register');
     }
 });
 
 async function openAnnouncementListModal() {
     document.getElementById('modal-announcement-list').classList.remove('hidden');
     const el = document.getElementById('announcement-list-content');
-    el.innerHTML = '<p class="loading-msg" style="text-align:center">불러오는 중...</p>';
+    el.innerHTML = `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/groups/${groupId}/announcements`);
     if (!result?.ok) {
         el.innerHTML = `
             <p class="empty-msg-sm" style="color:#e07070">
-                공지사항을 불러오지 못했습니다.<br>
-                <span style="font-size:0.78rem">${escapeHtml(result?.data?.detail || '서버 오류')}</span>
+                ${t('groupDetail.announcementsLoadFailed')}<br>
+                <span style="font-size:0.78rem">${escapeHtml(result?.data?.detail || t('groupDetail.serverError'))}</span>
              </p>`;
         return;
     }
@@ -307,7 +322,7 @@ function renderAnnouncementList() {
     const el = document.getElementById('announcement-list-content');
 
     if (!allAnnouncements.length) {
-        el.innerHTML = '<p class="empty-msg-sm">등록된 공지사항이 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noAnnouncements')}</p>`;
         return;
     }
 
@@ -316,10 +331,10 @@ function renderAnnouncementList() {
             <div class="announcement-item-head">
                 <h4 class="announcement-item-title">${escapeHtml(a.title)}</h4>
                 <span class="announcement-item-date">${formatDate(a.created_at)}</span>
-                ${isAdmin() ? `<button class="btn-delete-announcement" data-id="${a.id}">삭제</button>` : ''}
+                ${isAdmin() ? `<button class="btn-delete-announcement" data-id="${a.id}">${t('common.delete')}</button>` : ''}
             </div>
             <p class="announcement-item-content">${escapeHtml(a.content)}</p>
-            <p class="announcement-item-author">작성자: ${escapeHtml(a.author_nickname)}</p>
+            <p class="announcement-item-author">${t('groupDetail.authorLabel')} ${escapeHtml(a.author_nickname)}</p>
         </div>
     `).join('');
 
@@ -329,7 +344,7 @@ function renderAnnouncementList() {
 }
 
 async function deleteAnnouncement(announcementId) {
-    if (!confirm('이 공지사항을 삭제하시겠습니까?')) return;
+    if (!confirm(t('groupDetail.confirmDeleteAnnouncement'))) return;
 
     const result = await apiFetch(`/api/announcements/${announcementId}`, { method: 'DELETE' });
     if (result?.ok) {
@@ -337,7 +352,7 @@ async function deleteAnnouncement(announcementId) {
         renderAnnouncementList();
         await loadLatestAnnouncement();
     } else {
-        alert(result?.data?.detail || '삭제에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
@@ -376,12 +391,12 @@ document.getElementById('gs-input-color-auto').addEventListener('change', async 
     e.target.disabled = false;
     if (result?.ok) {
         cachedSettings.is_color_automatic = isColorAuto;
-        msgEl.textContent = '저장됨';
+        msgEl.textContent = t('groupDetail.saved');
         setTimeout(() => { msgEl.textContent = ''; }, 1500);
     } else {
         e.target.checked = !isColorAuto;  // 실패 시 원상복구
         msgEl.className  = 'settings-msg error';
-        msgEl.textContent = result?.data?.detail || '저장에 실패했습니다.';
+        msgEl.textContent = result?.data?.detail || t('groupDetail.saveFailed');
     }
 });
 
@@ -390,18 +405,18 @@ async function deleteGroup() {
     const btn     = document.getElementById('btn-confirm-delete-group');
     errorEl.textContent = '';
     btn.disabled = true;
-    btn.textContent = '삭제 중...';
+    btn.textContent = t('groupDetail.deleting');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}`, { method: 'DELETE' });
         if (result?.ok) {
             window.location.href = '../lobby/lobby.html';
         } else {
-            errorEl.textContent = result?.data?.detail || '삭제에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.deleteFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '삭제 확인';
+        btn.textContent = t('groupDetail.deleteConfirm');
     }
 }
 
@@ -440,13 +455,13 @@ document.getElementById('btn-save-pts').addEventListener('click', async () => {
 
     if ([ptsWin, ptsDraw, ptsLoss].some(v => isNaN(v) || v < 0 || v > 99)) {
         msgEl.className  = 'settings-msg error';
-        msgEl.textContent = '0~99 사이 숫자를 입력해주세요.';
+        msgEl.textContent = t('groupDetail.ptsRangeError');
         return;
     }
 
     const btn = document.getElementById('btn-save-pts');
     btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.textContent = t('groupDetail.saving');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}/settings`, {
@@ -455,28 +470,28 @@ document.getElementById('btn-save-pts').addEventListener('click', async () => {
         });
         if (result?.ok) {
             cachedSettings = { ...cachedSettings, pts_win: ptsWin, pts_draw: ptsDraw, pts_loss: ptsLoss };
-            msgEl.textContent = '저장되었습니다.';
+            msgEl.textContent = t('groupDetail.savedSuccess');
             setTimeout(() => { msgEl.textContent = ''; }, 2000);
             await loadLeaderboard();
         } else {
             msgEl.className   = 'settings-msg error';
-            msgEl.textContent = result?.data?.detail || '저장에 실패했습니다.';
+            msgEl.textContent = result?.data?.detail || t('groupDetail.saveFailed');
         }
     } finally {
         btn.disabled    = false;
-        btn.textContent = '저장';
+        btn.textContent = t('common.save');
     }
 });
 
 async function loadLeaderboard() {
-    document.getElementById('lb-content').innerHTML = '<p class="loading-msg" style="text-align:center">불러오는 중...</p>';
+    document.getElementById('lb-content').innerHTML = `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/groups/${groupId}/leaderboard`);
     if (!result?.ok) {
         document.getElementById('lb-content').innerHTML =
             `<p class="empty-msg-sm" style="color:#e07070">
-                순위표를 불러오지 못했습니다.<br>
-                <span style="font-size:0.78rem">${escapeHtml(result?.data?.detail || '서버 오류')}</span>
+                ${t('groupDetail.leaderboardLoadFailed')}<br>
+                <span style="font-size:0.78rem">${escapeHtml(result?.data?.detail || t('groupDetail.serverError'))}</span>
              </p>`;
         return;
     }
@@ -498,13 +513,14 @@ async function loadLeaderboard() {
 }
 
 function renderLeaderboard(standings, settings) {
-    document.getElementById('pts-rule-label').textContent =
-        `승 ${settings.pts_win}점 · 무 ${settings.pts_draw}점 · 패 ${settings.pts_loss}점`;
+    document.getElementById('pts-rule-label').textContent = t('groupDetail.ptsRule', {
+        win: settings.pts_win, draw: settings.pts_draw, loss: settings.pts_loss,
+    });
 
     const el = document.getElementById('lb-content');
 
     if (!standings.length) {
-        el.innerHTML = '<p class="empty-msg-sm">아직 경기 기록이 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noMatchRecords')}</p>`;
         return;
     }
 
@@ -523,7 +539,7 @@ function renderLeaderboard(standings, settings) {
         return `
             <tr class="${rankClass}">
                 <td class="lb-rank">${displayRank}</td>
-                <td class="lb-name">${escapeHtml(s.nickname)}${ratingStr}</td>
+                <td class="lb-name">${playerLink(s.id, s.nickname)}${ratingStr}</td>
                 <td class="lb-stat">${s.played}</td>
                 <td class="lb-stat lb-win">${s.wins}</td>
                 <td class="lb-stat lb-draw">${s.draws}</td>
@@ -537,17 +553,124 @@ function renderLeaderboard(standings, settings) {
             <thead>
                 <tr>
                     <th class="lb-rank">#</th>
-                    <th>선수</th>
-                    <th class="lb-stat">경기</th>
-                    <th class="lb-stat">승</th>
-                    <th class="lb-stat">무</th>
-                    <th class="lb-stat">패</th>
-                    <th class="lb-pts">승점</th>
+                    <th>${t('groupDetail.playerHeader')}</th>
+                    <th class="lb-stat">${t('groupDetail.playedHeader')}</th>
+                    <th class="lb-stat">${t('groupDetail.winShort')}</th>
+                    <th class="lb-stat">${t('groupDetail.drawShort')}</th>
+                    <th class="lb-stat">${t('groupDetail.lossShort')}</th>
+                    <th class="lb-pts">${t('groupDetail.pointsHeader')}</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
 }
+
+// ===== 멤버 프로필 모달 =====
+
+let profileRequestId = 0;
+
+async function openUserProfileModal(memberId) {
+    if (!memberId || isNaN(memberId)) return;
+
+    const requestId = ++profileRequestId;
+    document.getElementById('modal-user-profile').classList.remove('hidden');
+    document.getElementById('profile-modal-content').innerHTML =
+        '<p class="loading-msg" style="text-align:center">불러오는 중...</p>';
+
+    const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}/profile`);
+
+    // 로딩 도중 다른 멤버 프로필을 열었다면 이전 응답은 버림
+    if (requestId !== profileRequestId) return;
+
+    if (!result?.ok) {
+        document.getElementById('profile-modal-content').innerHTML = `
+            <p class="empty-msg-sm" style="color:#e07070">
+                ${t('groupDetail.profileLoadFailed')}<br>
+                <span style="font-size:0.78rem">${escapeHtml(result?.data?.detail || t('groupDetail.serverError'))}</span>
+            </p>`;
+        return;
+    }
+
+    renderUserProfileModal(result.data);
+}
+
+function renderProfileH2H(h2h) {
+    if (!h2h) return '';
+    if (!h2h.played) {
+        return `
+            <div class="profile-h2h-box">
+                <h4 class="profile-section-title">${t('groupDetail.h2hTitle')}</h4>
+                <p class="empty-msg-sm">${t('groupDetail.noH2hRecord')}</p>
+            </div>`;
+    }
+    return `
+        <div class="profile-h2h-box">
+            <h4 class="profile-section-title">${t('groupDetail.h2hTitle')}</h4>
+            <p class="profile-h2h-summary">
+                <strong>${t('groupDetail.h2hSummary', { myWins: h2h.my_wins, draws: h2h.draws, memberWins: h2h.member_wins })}</strong>
+                <span class="profile-h2h-sub">${t('groupDetail.h2hSub', { count: h2h.played })}</span>
+            </p>
+        </div>`;
+}
+
+function renderProfileMatchRow(m, memberId) {
+    const isDraw    = !m.winner_id;
+    const isWin     = m.winner_id === memberId;
+    const resultCls = isDraw ? 'draw' : (isWin ? 'win' : 'loss');
+    const resultTxt = isDraw ? t('common.draw') : (isWin ? t('groupDetail.winShort') : t('groupDetail.lossShort'));
+    const oppId     = m.player1_id === memberId ? m.player2_id : m.player1_id;
+    const oppName   = m.player1_id === memberId ? m.player2_nickname : m.player1_nickname;
+
+    return `
+        <div class="profile-match-row">
+            ${matchTypeBadge(m.is_official)}
+            <span class="profile-match-opponent">vs ${playerLink(oppId, oppName)}</span>
+            <span class="profile-match-result ${resultCls}">${resultTxt}</span>
+            <span class="profile-match-date">${formatDate(m.played_at)}</span>
+        </div>`;
+}
+
+function renderUserProfileModal(p) {
+    const roleBadge = p.role === '방장' ? '<span class="role-badge admin">방장</span>'
+                     : p.role === '임원' ? '<span class="role-badge officer">임원</span>' : '';
+    const ratingStr = p.rating_rapid != null ? p.rating_rapid : t('groupDetail.notLinked');
+    const { played, wins, draws, losses, points } = p.record;
+
+    const recentHtml = p.recent_matches.length
+        ? p.recent_matches.map(m => renderProfileMatchRow(m, p.id)).join('')
+        : `<p class="empty-msg-sm">${t('groupDetail.noMatchRecords')}</p>`;
+
+    document.getElementById('profile-modal-content').innerHTML = `
+        <div class="profile-header">
+            <h3 class="profile-name">${escapeHtml(p.nickname)}${roleBadge}</h3>
+            <p class="profile-chess-id">${p.chess_username ? `Chess.com: ${escapeHtml(p.chess_username)}` : t('groupDetail.chessNotLinked')}</p>
+        </div>
+        <div class="profile-stats-grid">
+            <div class="profile-stat-box">
+                <span class="profile-stat-label">${t('groupDetail.ratingLabel')}</span>
+                <span class="profile-stat-value">${ratingStr}</span>
+            </div>
+            <div class="profile-stat-box">
+                <span class="profile-stat-label">${t('groupDetail.recordLabel', { count: played })}</span>
+                <span class="profile-stat-value">${t('groupDetail.recordSummary', { wins, draws, losses })}</span>
+            </div>
+            <div class="profile-stat-box">
+                <span class="profile-stat-label">${t('groupDetail.pointsHeader')}</span>
+                <span class="profile-stat-value">${points}</span>
+            </div>
+        </div>
+        ${renderProfileH2H(p.head_to_head)}
+        <h4 class="profile-section-title">${t('groupDetail.recentMatchesLabel')}</h4>
+        <div class="profile-recent-list">${recentHtml}</div>
+    `;
+}
+
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.player-link');
+    if (!link) return;
+    e.stopPropagation();
+    openUserProfileModal(parseInt(link.dataset.userId, 10));
+});
 
 // ===== 투표 생성 모달 =====
 
@@ -559,7 +682,7 @@ document.getElementById('btn-confirm-create-poll').addEventListener('click', asy
 
     const btn = document.getElementById('btn-confirm-create-poll');
     btn.disabled = true;
-    btn.textContent = '생성 중...';
+    btn.textContent = t('groupDetail.creating2');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}/polls`, {
@@ -570,11 +693,11 @@ document.getElementById('btn-confirm-create-poll').addEventListener('click', asy
             document.getElementById('modal-create-poll').classList.add('hidden');
             await refreshPage();
         } else {
-            errorEl.textContent = result?.data?.detail || '투표 생성에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.pollCreateFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '생성';
+        btn.textContent = t('groupDetail.create');
     }
 });
 
@@ -589,8 +712,8 @@ function renderPollSection(pollDataArray) {
 
     const headHtml = `
         <div class="poll-section-head card-head-row">
-            <h2 class="card-heading">매치 관리</h2>
-            ${isAdmin() ? '<button class="btn-create-poll">+ 매치 투표 생성</button>' : ''}
+            <h2 class="card-heading">${t('groupDetail.matchManagementHeading')}</h2>
+            ${isAdmin() ? `<button class="btn-create-poll">${t('groupDetail.createPollButton')}</button>` : ''}
         </div>`;
 
     const cardsHtml = pollDataArray.length
@@ -598,7 +721,7 @@ function renderPollSection(pollDataArray) {
             poll.status === 'voting'  ? buildVotingCard(poll, votes, my_vote) :
             poll.status === 'playing' ? buildPlayingCard(poll, matches, votes) : ''
           ).join('')
-        : '<p class="empty-msg-sm">현재 진행 중인 투표나 매치가 없습니다.</p>';
+        : `<p class="empty-msg-sm">${t('groupDetail.noActivePolls')}</p>`;
 
     section.innerHTML = headHtml + cardsHtml;
 
@@ -614,6 +737,13 @@ function renderPollSection(pollDataArray) {
     // 참여/취소 (투표별)
     section.querySelectorAll('.btn-vote-toggle').forEach(btn => {
         btn.addEventListener('click', () => toggleVote(parseInt(btn.dataset.pollId), btn));
+    });
+
+    // 관리자: 특정 참가자 투표 강제 취소
+    section.querySelectorAll('.btn-cancel-vote').forEach(btn => {
+        btn.addEventListener('click', () => cancelMemberVote(
+            parseInt(btn.dataset.pollId), parseInt(btn.dataset.userId), btn.dataset.userName, btn
+        ));
     });
 
     // 관리자: 투표 종료 / 삭제
@@ -665,36 +795,40 @@ function renderPollSection(pollDataArray) {
 }
 
 function buildVotingCard(poll, votes, myVote) {
-    const titleStr  = poll.title ? escapeHtml(poll.title) : '참여 투표';
+    const titleStr  = poll.title ? escapeHtml(poll.title) : t('groupDetail.participationPoll');
     const voterRows = votes.length
         ? votes.map((v, i) => `
             <div class="voter-item">
                 <span class="voter-num">${i + 1}</span>
                 <span class="voter-name">${escapeHtml(v.nickname)}</span>
+                ${isAdmin() ? `
+                    <button class="btn-cancel-vote"
+                        data-poll-id="${poll.id}" data-user-id="${v.user_id}" data-user-name="${escapeHtml(v.nickname)}"
+                        title="${t('groupDetail.cancelVote')}">${t('groupDetail.cancelVote')}</button>` : ''}
             </div>`).join('')
-        : '<p class="empty-msg-sm">아직 참여자가 없습니다.</p>';
+        : `<p class="empty-msg-sm">${t('groupDetail.noParticipants')}</p>`;
     const adminBtns = isAdmin() ? `
         <button class="btn-close-poll" data-poll-id="${poll.id}" data-vote-count="${votes.length}">
-            종료 (${votes.length}명)
+            ${t('groupDetail.closePollButton', { count: votes.length })}
         </button>
-        <button class="btn-delete-poll" data-poll-id="${poll.id}">삭제</button>` : '';
+        <button class="btn-delete-poll" data-poll-id="${poll.id}">${t('common.delete')}</button>` : '';
 
     return `
         <div class="poll-card">
             <div class="card-head-row">
                 <div class="head-left">
                     <h3 class="poll-card-title">${titleStr}</h3>
-                    <span class="status-badge voting">투표 중</span>
+                    <span class="status-badge voting">${t('groupDetail.statusVoting')}</span>
                     ${matchTypeBadge(poll.is_official)}
                 </div>
                 <div class="head-buttons">
                     <button class="btn-vote${myVote ? ' voted' : ''} btn-vote-toggle" data-poll-id="${poll.id}">
-                        ${myVote ? '참여 취소' : '참여'}
+                        ${myVote ? t('groupDetail.cancelParticipation') : t('groupDetail.participate')}
                     </button>
                     ${adminBtns}
                 </div>
             </div>
-            <p class="vote-summary">참여자 <strong>${votes.length}</strong>명</p>
+            <p class="vote-summary">${t('groupDetail.participantsCount', { count: votes.length })}</p>
             <div class="voter-list">${voterRows}</div>
         </div>`;
 }
@@ -719,44 +853,44 @@ function buildPlayingCard(poll, matches, votes = []) {
             return `
                 <div class="match-card finished">
                     <div class="match-vs">
-                        <span class="match-player${p1Win ? ' winner' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                        <span class="match-player${p1Win ? ' winner' : ''}"><span class="color-chip white">${t('groupDetail.whiteShort')}</span>${playerLink(m.player1_id, m.player1_nickname)}</span>
                         <span class="vs-label">vs</span>
-                        <span class="match-player${p2Win ? ' winner' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                        <span class="match-player${p2Win ? ' winner' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname)}</span>
                     </div>
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
-                        ${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}
+                        ${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname))}
                     </span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">경기 수정</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>` : ''}
                     <div class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
                     </div>
                 </div>`;
         }
         return `
             <div class="match-card">
                 <div class="match-vs">
-                    <span class="match-player"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                    <span class="match-player"><span class="color-chip white">${t('groupDetail.whiteShort')}</span>${playerLink(m.player1_id, m.player1_nickname)}</span>
                     <span class="vs-label">vs</span>
-                    <span class="match-player"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                    <span class="match-player"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname)}</span>
                 </div>
                 ${isAdmin() ? `
                     <button class="btn-record-result"
                         data-match-id="${m.id}"
                         data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
-                        data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">경기 종료</button>
-                    <button class="btn-edit-match" data-match-id="${m.id}">경기 수정</button>
+                        data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">${t('groupDetail.finishMatch')}</button>
+                    <button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>
                 ` : ''}
             </div>`;
     }).join('');
 
     const allDone  = matches.every(m => m.status === 'finished');
-    const titleStr = poll.title ? escapeHtml(poll.title) : '대진표';
+    const titleStr = poll.title ? escapeHtml(poll.title) : t('groupDetail.bracketTitle');
 
     const matchPlayerIds = new Set(matches.flatMap(m => [m.player1_id, m.player2_id]));
     const byeVoter = votes.find(v => !matchPlayerIds.has(v.user_id));
     const byeNotice = byeVoter
-        ? `<p class="bye-notice">홀수 인원으로 인해 <strong>${escapeHtml(byeVoter.nickname)}</strong>님은 이번 라운드에서 제외됩니다.</p>`
+        ? `<p class="bye-notice">${t('groupDetail.byeNotice', { name: escapeHtml(byeVoter.nickname) })}</p>`
         : '';
 
     return `
@@ -764,12 +898,12 @@ function buildPlayingCard(poll, matches, votes = []) {
             <div class="card-head-row">
                 <div class="head-left">
                     <h3 class="poll-card-title">${titleStr}</h3>
-                    <span class="status-badge playing">${allDone ? '완료' : '진행 중'}</span>
+                    <span class="status-badge playing">${allDone ? t('groupDetail.statusDone') : t('groupDetail.statusInProgress')}</span>
                     ${matchTypeBadge(poll.is_official)}
                 </div>
                 <div class="head-buttons">
-                    ${isAdmin() ? `<button class="btn-add-match-active" data-poll-id="${poll.id}">+ 경기 추가</button>` : ''}
-                    ${isAdmin() ? `<button class="btn-reopen-poll" data-poll-id="${poll.id}">투표 다시하기</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-add-match-active" data-poll-id="${poll.id}">${t('groupDetail.addMatchButton')}</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-reopen-poll" data-poll-id="${poll.id}">${t('groupDetail.reopenPoll')}</button>` : ''}
                 </div>
             </div>
             ${byeNotice}
@@ -782,11 +916,11 @@ function buildPlayingCard(poll, matches, votes = []) {
 async function loadHistory(page = 1) {
     historyPage = page;
     const el = document.getElementById('match-history');
-    el.innerHTML = '<p class="loading-msg">불러오는 중...</p>';
+    el.innerHTML = `<p class="loading-msg">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/groups/${groupId}/history?page=${page}`);
     if (!result?.ok) {
-        el.innerHTML = '<p class="empty-msg-sm">불러오지 못했습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
         return;
     }
     renderHistoryAccordion(result.data);
@@ -796,14 +930,14 @@ function renderHistoryAccordion({ polls, page, pages }) {
     const el = document.getElementById('match-history');
 
     if (!polls.length) {
-        el.innerHTML = '<p class="empty-msg-sm">아직 완료된 대전이 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noCompletedMatches')}</p>`;
         return;
     }
 
     const paginationHtml = pages > 1 ? buildHistoryPagination(page, pages) : '';
 
     const accordionHtml = polls.map(p => {
-        const title   = p.title || '(이름 없음)';
+        const title   = p.title || t('groupDetail.unnamed');
         const dateStr = formatDate(p.created_at);
         return `
             <div class="history-accordion">
@@ -811,7 +945,7 @@ function renderHistoryAccordion({ polls, page, pages }) {
                     <span class="accordion-icon">►</span>
                     <span class="accordion-title">${escapeHtml(title)}</span>
                     ${matchTypeBadge(p.is_official)}
-                    <span class="accordion-meta">${p.match_count}경기 · ${dateStr}</span>
+                    <span class="accordion-meta">${t('groupDetail.matchCount', { count: p.match_count })} · ${dateStr}</span>
                 </button>
                 <div class="accordion-body hidden" id="accordion-body-${p.id}"></div>
             </div>`;
@@ -873,11 +1007,11 @@ async function toggleAccordion(pollId) {
 async function fetchPollMatches(pollId) {
     const body = document.getElementById(`accordion-body-${pollId}`);
     if (!body) return;
-    body.innerHTML = '<p class="accordion-loading">불러오는 중...</p>';
+    body.innerHTML = `<p class="accordion-loading">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/polls/${pollId}/matches`);
     if (!result?.ok) {
-        body.innerHTML = '<p class="empty-msg-sm">불러오지 못했습니다.</p>';
+        body.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
         return;
     }
 
@@ -899,12 +1033,12 @@ function renderPollMatches(pollId) {
 
     const addBtnHtml = isAdmin()
         ? `<div class="accordion-add-row">
-               <button class="btn-add-match-to-poll" data-poll-id="${pollId}">+ 경기 추가</button>
+               <button class="btn-add-match-to-poll" data-poll-id="${pollId}">${t('groupDetail.addMatchButton')}</button>
            </div>`
         : '';
 
     if (!matches?.length) {
-        body.innerHTML = addBtnHtml + '<p class="empty-msg-sm">경기 기록이 없습니다.</p>';
+        body.innerHTML = addBtnHtml + `<p class="empty-msg-sm">${t('groupDetail.noMatchRecords')}</p>`;
     } else {
         body.innerHTML = addBtnHtml + matches.map(m => {
             const isDraw  = !m.winner_id;
@@ -916,15 +1050,15 @@ function renderPollMatches(pollId) {
             return `
                 <div class="accordion-match-item">
                     <span class="match-players">
-                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">${t('groupDetail.whiteShort')}</span>${playerLink(m.player1_id, m.player1_nickname)}</span>
                         <span class="match-vs-sm">vs</span>
-                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname)}</span>
                     </span>
-                    <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">수정</button>` : ''}
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname))}</span>
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('common.edit')}</button>` : ''}
                     <span class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
                     </span>
                 </div>`;
         }).join('');
@@ -958,11 +1092,11 @@ function renderPollMatches(pollId) {
 
 async function loadRecentMatches() {
     const el = document.getElementById('recent-matches');
-    el.innerHTML = '<p class="loading-msg" style="text-align:left">불러오는 중...</p>';
+    el.innerHTML = `<p class="loading-msg" style="text-align:left">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/groups/${groupId}/matches`);
     if (!result?.ok) {
-        el.innerHTML = '<p class="empty-msg-sm">불러오지 못했습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
         return;
     }
     renderRecentMatches(result.data);
@@ -972,7 +1106,7 @@ function renderRecentMatches(matches) {
     const el = document.getElementById('recent-matches');
 
     if (!matches.length) {
-        el.innerHTML = '<p class="empty-msg-sm">아직 기록된 경기가 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noMatchHistory')}</p>`;
         return;
     }
 
@@ -997,14 +1131,14 @@ function renderRecentMatches(matches) {
                 <div class="recent-match-row">
                     ${matchTypeBadge(m.is_official)}
                     <span class="match-players">
-                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                        <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">${t('groupDetail.whiteShort')}</span>${playerLink(m.player1_id, m.player1_nickname)}</span>
                         <span class="match-vs-sm">vs</span>
-                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                        <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname)}</span>
                     </span>
-                    <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname))}</span>
                     <span class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? '기보 수정' : '기보 추가'}</button>` : ''}
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">기보 보기</button>` : ''}
+                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
                     </span>
                     <span class="recent-match-date">${formatDate(m.played_at)}</span>
                 </div>
@@ -1033,7 +1167,7 @@ let selectedFriendlyResult = 'p1_win';
 
 function openFriendlyMatchModal() {
     if (currentMembers.length < 2) {
-        alert('경기를 기록하려면 그룹에 멤버가 2명 이상 필요합니다.');
+        alert(t('groupDetail.needTwoMembers'));
         return;
     }
 
@@ -1058,11 +1192,11 @@ function openFriendlyMatchModal() {
 function updateFriendlyResultButtons() {
     const p1Sel  = document.getElementById('friendly-player1');
     const p2Sel  = document.getElementById('friendly-player2');
-    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || '백';
-    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || '흑';
+    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || t('groupDetail.whiteShort');
+    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || t('groupDetail.blackShort');
 
-    document.getElementById('btn-friendly-p1-win').textContent = `${p1Name} 승 (백)`;
-    document.getElementById('btn-friendly-p2-win').textContent = `${p2Name} 승 (흑)`;
+    document.getElementById('btn-friendly-p1-win').textContent = t('groupDetail.winParen', { name: p1Name, color: t('groupDetail.whiteShort') });
+    document.getElementById('btn-friendly-p2-win').textContent = t('groupDetail.winParen', { name: p2Name, color: t('groupDetail.blackShort') });
 
     document.querySelectorAll('.btn-friendly-result').forEach(btn => {
         btn.classList.toggle('selected', btn.dataset.result === selectedFriendlyResult);
@@ -1102,13 +1236,13 @@ document.getElementById('btn-confirm-friendly-match').addEventListener('click', 
     errorEl.textContent = '';
 
     if (p1Id === p2Id) {
-        errorEl.textContent = '백과 흑 선수는 달라야 합니다.';
+        errorEl.textContent = t('groupDetail.playersMustDiffer');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-friendly-match');
     btn.disabled = true;
-    btn.textContent = '기록 중...';
+    btn.textContent = t('groupDetail.recording');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}/matches/friendly`, {
@@ -1119,11 +1253,11 @@ document.getElementById('btn-confirm-friendly-match').addEventListener('click', 
             document.getElementById('modal-friendly-match').classList.add('hidden');
             await loadRecentMatches();
         } else {
-            errorEl.textContent = result?.data?.detail || '기록에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.recordFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '기록';
+        btn.textContent = t('groupDetail.record');
     }
 });
 
@@ -1167,7 +1301,7 @@ async function loadFolders() {
 function renderFolderSelectOptions() {
     const select = document.getElementById('select-assign-folder');
     const current = select.value;
-    select.innerHTML = '<option value="">폴더 선택...</option>' +
+    select.innerHTML = `<option value="">${t('groupDetail.selectFolderPlaceholder')}</option>` +
         allFolders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
     if (allFolders.some(f => String(f.id) === current)) select.value = current;
 }
@@ -1176,7 +1310,7 @@ function renderFolderAccordion() {
     const el = document.getElementById('folder-view-content');
 
     if (!allFolders.length) {
-        el.innerHTML = '<p class="empty-msg-sm">생성된 폴더가 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noFolders')}</p>`;
         return;
     }
 
@@ -1186,8 +1320,8 @@ function renderFolderAccordion() {
                 <div class="history-accordion">
                     <div class="folder-rename-row">
                         <input type="text" id="input-rename-folder" class="form-input" value="${escapeHtml(f.name)}" maxlength="50">
-                        <button class="btn-folder-icon btn-folder-save" data-folder-id="${f.id}" title="저장">&#10003;</button>
-                        <button class="btn-folder-icon btn-folder-cancel-rename" title="취소">&#10005;</button>
+                        <button class="btn-folder-icon btn-folder-save" data-folder-id="${f.id}" title="${t('common.save')}">&#10003;</button>
+                        <button class="btn-folder-icon btn-folder-cancel-rename" title="${t('common.cancel')}">&#10005;</button>
                     </div>
                 </div>`;
         }
@@ -1197,12 +1331,12 @@ function renderFolderAccordion() {
                     <button class="accordion-header" data-folder-id="${f.id}">
                         <span class="accordion-icon">►</span>
                         <span class="accordion-title">${escapeHtml(f.name)}</span>
-                        <span class="accordion-meta">${f.match_count}경기</span>
+                        <span class="accordion-meta">${t('groupDetail.matchCount', { count: f.match_count })}</span>
                     </button>
                     ${isAdmin() ? `
                         <div class="folder-admin-actions">
-                            <button class="btn-folder-icon btn-rename-folder" data-folder-id="${f.id}" title="이름 변경">&#9998;</button>
-                            <button class="btn-folder-icon btn-delete-folder" data-folder-id="${f.id}" data-folder-name="${escapeHtml(f.name)}" title="삭제">&#128465;</button>
+                            <button class="btn-folder-icon btn-rename-folder" data-folder-id="${f.id}" title="${t('groupDetail.renameFolder')}">&#9998;</button>
+                            <button class="btn-folder-icon btn-delete-folder" data-folder-id="${f.id}" data-folder-name="${escapeHtml(f.name)}" title="${t('common.delete')}">&#128465;</button>
                         </div>` : ''}
                 </div>
                 <div class="accordion-body hidden" id="folder-body-${f.id}"></div>
@@ -1253,7 +1387,7 @@ async function toggleFolderAccordion(folderId) {
         icon.textContent = '▼';
         openFolderId = folderId;
         if (!folderMatchCache[folderId]) {
-            body.innerHTML = '<p class="accordion-loading">불러오는 중...</p>';
+            body.innerHTML = `<p class="accordion-loading">${t('common.loading')}</p>`;
             const result = await apiFetch(`/api/friendly-folders/${folderId}/matches`);
             folderMatchCache[folderId] = result?.ok ? result.data.matches : [];
         }
@@ -1266,7 +1400,7 @@ function renderFolderMatches(folderId) {
     const matches = folderMatchCache[folderId];
 
     if (!matches?.length) {
-        body.innerHTML = '<p class="empty-msg-sm">이 폴더에 담긴 경기가 없습니다.</p>';
+        body.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.folderEmpty')}</p>`;
         return;
     }
 
@@ -1278,11 +1412,11 @@ function renderFolderMatches(folderId) {
         return `
             <div class="accordion-match-item folder-match-item">
                 <span class="match-players">
-                    <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">백</span>${escapeHtml(m.player1_nickname)}</span>
+                    <span class="${p1Win ? 'match-winner-name' : ''}"><span class="color-chip white">${t('groupDetail.whiteShort')}</span>${playerLink(m.player1_id, m.player1_nickname)}</span>
                     <span class="match-vs-sm">vs</span>
-                    <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">흑</span>${escapeHtml(m.player2_nickname)}</span>
+                    <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname)}</span>
                 </span>
-                <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname))}</span>
                 <span class="recent-match-date">${formatDate(m.played_at)}</span>
                 ${noteHtml}
             </div>`;
@@ -1301,12 +1435,12 @@ async function renameFolder(folderId) {
         renamingFolderId = null;
         await loadFolders();
     } else {
-        alert(result?.data?.detail || '이름 변경에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.renameFailed'));
     }
 }
 
 async function deleteFolder(folderId, folderName) {
-    if (!confirm(`'${folderName}' 폴더를 삭제하시겠습니까? 안의 경기는 삭제되지 않고 미분류 상태가 됩니다.`)) return;
+    if (!confirm(t('groupDetail.confirmDeleteFolder', { name: folderName }))) return;
 
     const result = await apiFetch(`/api/friendly-folders/${folderId}`, { method: 'DELETE' });
     if (result?.ok) {
@@ -1315,7 +1449,7 @@ async function deleteFolder(folderId, folderName) {
         await loadFolders();
         if (isAdmin()) await loadManageMatches();
     } else {
-        alert(result?.data?.detail || '삭제에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
@@ -1325,13 +1459,13 @@ document.getElementById('btn-create-folder').addEventListener('click', async () 
     errorEl.textContent = '';
 
     if (!name) {
-        errorEl.textContent = '폴더 이름을 입력해주세요.';
+        errorEl.textContent = t('groupDetail.folderNameRequired');
         return;
     }
 
     const btn = document.getElementById('btn-create-folder');
     btn.disabled = true;
-    btn.textContent = '생성 중...';
+    btn.textContent = t('groupDetail.creatingFolder');
 
     try {
         const result = await apiFetch(`/api/groups/${groupId}/friendly-folders`, {
@@ -1342,11 +1476,11 @@ document.getElementById('btn-create-folder').addEventListener('click', async () 
             document.getElementById('input-new-folder-name').value = '';
             await loadFolders();
         } else {
-            errorEl.textContent = result?.data?.detail || '폴더 생성에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.folderCreateFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '폴더 생성';
+        btn.textContent = t('groupDetail.createFolder');
     }
 });
 
@@ -1365,7 +1499,7 @@ function renderManageMatchList() {
     const el = document.getElementById('folder-manage-match-list');
 
     if (!manageMatches.length) {
-        el.innerHTML = '<p class="empty-msg-sm">직접 기록된 친선 경기가 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noFriendlyMatches')}</p>`;
         return;
     }
 
@@ -1375,7 +1509,7 @@ function renderManageMatchList() {
         const p2Win  = m.winner_id === m.player2_id;
         const folderTag = m.folder_id
             ? `<span class="official-badge friendly">${escapeHtml(m.folder_name)}</span>`
-            : `<span class="official-badge unfoldered">미분류</span>`;
+            : `<span class="official-badge unfoldered">${t('groupDetail.unfoldered')}</span>`;
         return `
             <label class="folder-manage-row">
                 <input type="checkbox" class="manage-match-checkbox" data-match-id="${m.id}" ${selectedManageIds.has(m.id) ? 'checked' : ''}>
@@ -1384,7 +1518,7 @@ function renderManageMatchList() {
                     <span class="match-vs-sm">vs</span>
                     <span class="${p2Win ? 'match-winner-name' : ''}">${escapeHtml(m.player2_nickname)}</span>
                 </span>
-                <span class="match-result ${isDraw ? 'draw' : ''}">${isDraw ? '무승부' : `${escapeHtml(m.winner_nickname)} 승`}</span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, escapeHtml(m.winner_nickname))}</span>
                 ${folderTag}
             </label>`;
     }).join('');
@@ -1403,11 +1537,11 @@ async function assignSelectedMatches(folderId) {
     errorEl.textContent = '';
 
     if (!selectedManageIds.size) {
-        errorEl.textContent = '경기를 하나 이상 선택해주세요.';
+        errorEl.textContent = t('groupDetail.selectAtLeastOneMatch');
         return;
     }
     if (folderId !== null && !folderId) {
-        errorEl.textContent = '담을 폴더를 선택해주세요.';
+        errorEl.textContent = t('groupDetail.selectFolderRequired');
         return;
     }
 
@@ -1420,7 +1554,7 @@ async function assignSelectedMatches(folderId) {
         await loadFolders();
         await loadManageMatches();
     } else {
-        errorEl.textContent = result?.data?.detail || '처리에 실패했습니다.';
+        errorEl.textContent = result?.data?.detail || t('groupDetail.processingFailed');
     }
 }
 
@@ -1436,52 +1570,65 @@ document.getElementById('btn-remove-from-folder').addEventListener('click', () =
 // ===== API 액션 =====
 
 async function deletePoll(pollId) {
-    if (!confirm('투표를 삭제하시겠습니까? 참여 정보도 모두 사라집니다.')) return;
+    if (!confirm(t('groupDetail.confirmDeletePoll'))) return;
     const result = await apiFetch(`/api/polls/${pollId}`, { method: 'DELETE' });
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || '삭제에 실패했습니다.');
+        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
 async function toggleVote(pollId, btn) {
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.processing')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/vote`, { method: 'POST' });
     if (result?.ok) {
         await refreshPoll();
     } else {
-        if (btn) { btn.disabled = false; btn.textContent = btn.classList.contains('voted') ? '참여 취소' : '참여'; }
-        alert(result?.data?.detail || '오류가 발생했습니다.');
+        if (btn) { btn.disabled = false; btn.textContent = btn.classList.contains('voted') ? t('groupDetail.cancelParticipation') : t('groupDetail.participate'); }
+        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
+    }
+}
+
+async function cancelMemberVote(pollId, userId, userName, btn) {
+    if (!confirm(t('groupDetail.confirmCancelVote', { name: userName }))) return;
+
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.cancelling')}`; }
+    const result = await apiFetch(`/api/polls/${pollId}/votes/${userId}`, { method: 'DELETE' });
+    if (result?.ok) {
+        await refreshPoll();
+    } else {
+        if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.cancelVote'); }
+        alert(result?.data?.detail || t('groupDetail.cancelVoteFailed'));
     }
 }
 
 async function closePoll(pollId, voteCount, btn) {
     if (voteCount < 2) {
-        alert('매치 생성에는 최소 2명의 참여자가 필요합니다.');
+        alert(t('groupDetail.needTwoParticipants'));
         return;
     }
-    if (!confirm(`${voteCount}명의 참여자로 대진을 생성하고 투표를 종료하시겠습니까?`)) return;
+    if (!confirm(t('groupDetail.confirmClosePoll', { count: voteCount }))) return;
 
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.processing')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/close`, { method: 'POST' });
     if (result?.ok) {
         await refreshPage();
     } else {
-        if (btn) { btn.disabled = false; btn.textContent = '투표 종료'; }
-        alert(result?.data?.detail || '오류가 발생했습니다.');
+        if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.closePollShort'); }
+        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
     }
 }
 
 async function reopenPoll(pollId, btn) {
-    if (!confirm('대진표가 삭제되고 투표 단계로 돌아갑니다. 기존 참여자는 유지됩니다. 계속하시겠습니까?')) return;
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>처리 중...'; }
+    if (!confirm(t('groupDetail.confirmReopenPoll'))) return;
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.processing')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/reopen`, { method: 'POST' });
     if (result?.ok) {
         await refreshPoll();
     } else {
-        if (btn) { btn.disabled = false; btn.textContent = '투표 다시하기'; }
-        alert(result?.data?.detail || '오류가 발생했습니다.');
+        if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.reopenPoll'); }
+        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
     }
 }
 
@@ -1492,8 +1639,8 @@ function openResultModal(matchId, p1Id, p1Name, p2Id, p2Name) {
     pendingP1Id    = p1Id;
     pendingP2Id    = p2Id;
     document.getElementById('result-match-label').textContent = `${p1Name} vs ${p2Name}`;
-    document.getElementById('btn-p1-win').textContent = `${p1Name} 승`;
-    document.getElementById('btn-p2-win').textContent = `${p2Name} 승`;
+    document.getElementById('btn-p1-win').textContent = t('groupDetail.winnerAnnounce', { name: p1Name });
+    document.getElementById('btn-p2-win').textContent = t('groupDetail.winnerAnnounce', { name: p2Name });
     document.getElementById('result-error').textContent = '';
     setResultBtnsDisabled(false);
     document.getElementById('modal-result').classList.remove('hidden');
@@ -1516,7 +1663,7 @@ async function recordResult(winnerId) {
         await refreshPage();
     } else {
         document.getElementById('result-error').textContent =
-            result?.data?.detail || '오류가 발생했습니다.';
+            result?.data?.detail || t('groupDetail.errorOccurred');
         setResultBtnsDisabled(false);
     }
 }
@@ -1541,19 +1688,19 @@ document.getElementById('btn-confirm-pgn').addEventListener('click', async () =>
     errorEl.textContent = '';
 
     if (!pgn) {
-        errorEl.textContent = '기보를 입력해주세요.';
+        errorEl.textContent = t('groupDetail.pgnRequired');
         return;
     }
 
     // chess.js로 프론트엔드 유효성 검사
     if (!isValidPgn(pgn)) {
-        errorEl.textContent = '유효하지 않은 기보 형식입니다.';
+        errorEl.textContent = t('groupDetail.pgnInvalid');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-pgn');
     btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.textContent = t('groupDetail.saving');
 
     try {
         const result = await apiFetch(`/api/matches/${pendingPgnMatchId}/pgn`, {
@@ -1564,11 +1711,11 @@ document.getElementById('btn-confirm-pgn').addEventListener('click', async () =>
             document.getElementById('modal-pgn-edit').classList.add('hidden');
             await refreshPage();
         } else {
-            errorEl.textContent = result?.data?.detail || '저장에 실패했습니다.';
+            errorEl.textContent = result?.data?.detail || t('groupDetail.saveFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '저장';
+        btn.textContent = t('common.save');
     }
 });
 
@@ -1579,7 +1726,7 @@ function openPgnViewer(pgn, p1Name, p2Name) {
     try {
         const chess = new Chess();
         if (!chess.load_pgn(pgn)) {
-            alert('기보를 불러올 수 없습니다.');
+            alert(t('groupDetail.pgnLoadFailed'));
             return;
         }
         const history = chess.history();
@@ -1592,15 +1739,15 @@ function openPgnViewer(pgn, p1Name, p2Name) {
             pgnPositions.push(temp.fen());
         });
     } catch {
-        alert('기보를 불러올 수 없습니다.');
+        alert(t('groupDetail.pgnLoadFailed'));
         return;
     }
 
     pgnMoveIndex = 0;
 
     document.getElementById('pgn-viewer-title').textContent = `${p1Name} vs ${p2Name}`;
-    document.getElementById('pgn-player-white').textContent = `⬜ 백 (White): ${p1Name}`;
-    document.getElementById('pgn-player-black').textContent = `⬛ 흑 (Black): ${p2Name}`;
+    document.getElementById('pgn-player-white').textContent = `⬜ ${t('groupDetail.whiteLabel')}: ${p1Name}`;
+    document.getElementById('pgn-player-black').textContent = `⬛ ${t('groupDetail.blackLabel')}: ${p2Name}`;
     document.getElementById('modal-pgn-viewer').classList.remove('hidden');
 
     // 보드 크기 계산 (모달 내부 너비 기준)
@@ -1641,7 +1788,7 @@ function openPgnViewer(pgn, p1Name, p2Name) {
 function renderMoveList() {
     const el = document.getElementById('pgn-move-list');
     if (!pgnSans.length) {
-        el.innerHTML = '<span class="pgn-no-moves">수가 없습니다.</span>';
+        el.innerHTML = `<span class="pgn-no-moves">${t('groupDetail.noMoves')}</span>`;
         return;
     }
 
@@ -1744,7 +1891,7 @@ function openEditMatchModal(matchId, pollId = null) {
         selectedEditResult = 'none';
     }
 
-    document.querySelector('#modal-edit-match .modal-title').textContent = '경기 수정';
+    document.querySelector('#modal-edit-match .modal-title').textContent = t('groupDetail.editMatchTitle');
     updateEditResultButtons();
     document.getElementById('edit-match-error').textContent = '';
     document.getElementById('modal-edit-match').classList.remove('hidden');
@@ -1770,7 +1917,7 @@ function openAddMatchModal(pollId, context = 'history') {
     }
 
     selectedEditResult = 'p1_win';
-    document.querySelector('#modal-edit-match .modal-title').textContent = '경기 추가';
+    document.querySelector('#modal-edit-match .modal-title').textContent = t('groupDetail.addMatchTitle');
     updateEditResultButtons();
     document.getElementById('edit-match-error').textContent = '';
     document.getElementById('modal-edit-match').classList.remove('hidden');
@@ -1779,11 +1926,11 @@ function openAddMatchModal(pollId, context = 'history') {
 function updateEditResultButtons() {
     const p1Sel  = document.getElementById('edit-player1');
     const p2Sel  = document.getElementById('edit-player2');
-    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || '백';
-    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || '흑';
+    const p1Name = p1Sel.options[p1Sel.selectedIndex]?.text || t('groupDetail.whiteShort');
+    const p2Name = p2Sel.options[p2Sel.selectedIndex]?.text || t('groupDetail.blackShort');
 
-    document.getElementById('btn-edit-p1-win').textContent = `${p1Name} 승 (백)`;
-    document.getElementById('btn-edit-p2-win').textContent = `${p2Name} 승 (흑)`;
+    document.getElementById('btn-edit-p1-win').textContent = t('groupDetail.winParen', { name: p1Name, color: t('groupDetail.whiteShort') });
+    document.getElementById('btn-edit-p2-win').textContent = t('groupDetail.winParen', { name: p2Name, color: t('groupDetail.blackShort') });
 
     document.querySelectorAll('.btn-edit-result').forEach(btn => {
         btn.classList.toggle('selected', btn.dataset.result === selectedEditResult);
@@ -1823,17 +1970,17 @@ document.getElementById('btn-confirm-edit-match').addEventListener('click', asyn
     errorEl.textContent = '';
 
     if (p1Id === p2Id) {
-        errorEl.textContent = '백과 흑 선수는 달라야 합니다.';
+        errorEl.textContent = t('groupDetail.playersMustDiffer');
         return;
     }
     if (editMatchMode === 'add' && selectedEditResult === 'none') {
-        errorEl.textContent = '결과를 선택해주세요.';
+        errorEl.textContent = t('groupDetail.resultRequired');
         return;
     }
 
     const btn = document.getElementById('btn-confirm-edit-match');
     btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.textContent = t('groupDetail.saving');
 
     try {
         let apiResult;
@@ -1862,11 +2009,11 @@ document.getElementById('btn-confirm-edit-match').addEventListener('click', asyn
                 await refreshPage();
             }
         } else {
-            errorEl.textContent = apiResult?.data?.detail || '저장에 실패했습니다.';
+            errorEl.textContent = apiResult?.data?.detail || t('groupDetail.saveFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = '저장';
+        btn.textContent = t('common.save');
     }
 });
 
@@ -1898,10 +2045,10 @@ async function refreshPage() {
 
     const { group, members, stats, current_role } = membersRes.data;
 
-    document.title     = `${group.name} - 체스 동아리`;
+    document.title     = `${group.name} - ${t('common.appName')}`;
     document.getElementById('group-name').textContent  = group.name;
     document.getElementById('invite-code').textContent = group.invite_code;
-    document.getElementById('member-count').textContent = `${stats.member_count}명`;
+    document.getElementById('member-count').textContent = t('lobby.memberCountLabel', { count: stats.member_count });
 
     currentMembers = members;
     currentRole    = current_role;
@@ -1923,22 +2070,22 @@ async function refreshPage() {
 
 // ===== 활동 기록 =====
 
-const ACTION_LABELS = {
-    '투표_종료':     '투표 종료',
-    '투표_재개':     '투표 재개',
-    '투표_삭제':     '투표 삭제',
-    '경기_결과기록': '경기 결과 기록',
-    '경기_결과수정': '경기 결과 수정',
-    '경기_수정':     '경기 수정',
-    '경기_추가':     '경기 추가',
-    '친선경기_기록': '친선 경기 기록',
-    '폴더_생성':     '폴더 생성',
-    '폴더_수정':     '폴더 수정',
-    '폴더_삭제':     '폴더 삭제',
-    '친선경기_폴더담기': '친선 경기 폴더 담기',
-    '친선경기_폴더빼기': '친선 경기 폴더 빼기',
-    '멤버_강퇴':     '멤버 강퇴',
-    '역할_변경':     '역할 변경',
+const ACTION_KEY_MAP = {
+    '투표_종료':     'pollClose',
+    '투표_재개':     'pollReopen',
+    '투표_삭제':     'pollDelete',
+    '경기_결과기록': 'matchRecord',
+    '경기_결과수정': 'matchResultEdit',
+    '경기_수정':     'matchEdit',
+    '경기_추가':     'matchAdd',
+    '친선경기_기록': 'friendlyRecord',
+    '폴더_생성':     'folderCreate',
+    '폴더_수정':     'folderEdit',
+    '폴더_삭제':     'folderDelete',
+    '친선경기_폴더담기': 'folderAssign',
+    '친선경기_폴더빼기': 'folderRemove',
+    '멤버_강퇴':     'memberKick',
+    '역할_변경':     'roleChange',
 };
 
 const ACTION_COLORS = {
@@ -1969,11 +2116,11 @@ async function loadActivityLogs() {
 function renderActivityLogs(logs) {
     const el = document.getElementById('activity-log-list');
     if (!logs.length) {
-        el.innerHTML = '<p class="empty-msg-sm">기록된 활동이 없습니다.</p>';
+        el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noActivityLogs')}</p>`;
         return;
     }
     el.innerHTML = logs.map(log => {
-        const label = ACTION_LABELS[log.action] || log.action;
+        const label = ACTION_KEY_MAP[log.action] ? t('groupDetail.action.' + ACTION_KEY_MAP[log.action]) : log.action;
         const color = ACTION_COLORS[log.action] || 'var(--color-primary)';
         const time  = log.created_at.replace('T', ' ').slice(0, 16);
         return `
@@ -2030,15 +2177,17 @@ document.getElementById('btn-copy').addEventListener('click', async () => {
     try {
         await navigator.clipboard.writeText(code);
         const btn = document.getElementById('btn-copy');
-        btn.textContent = '복사됨!';
-        setTimeout(() => { btn.textContent = '복사'; }, 1500);
+        btn.textContent = t('groupDetail.copied');
+        setTimeout(() => { btn.textContent = t('groupDetail.copy'); }, 1500);
     } catch { /* 미지원 환경 무시 */ }
 });
 
 // ===== 로그아웃 =====
 
 document.getElementById('btn-logout').addEventListener('click', () => {
-    localStorage.clear();
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('nickname');
     window.location.href = '../login/login.html';
 });
 

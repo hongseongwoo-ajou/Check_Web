@@ -17,6 +17,8 @@
 
 .header-placeholder {
     width: 140px; /* btn-back 너비와 균형 */
+    display: flex;
+    justify-content: flex-end;
 }
 
 .btn-back {
@@ -77,11 +79,11 @@
 
 .ctrl-btn-reset {
     background: transparent;
-    border: 1px solid #e07070;
-    color: #e07070;
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
 }
 
-.ctrl-btn-reset:hover { background: rgba(224,112,112,0.1); }
+.ctrl-btn-reset:hover { background: rgba(var(--color-danger-rgb), 0.1); }
 
 .ctrl-btn-undo {
     background: transparent;
@@ -143,9 +145,9 @@
     transition: background 0.2s;
 }
 
-.turn-dot.white { background: #f0f0f0; border-color: #ccc; }
+.turn-dot.white { background: #f0f0f0; border-color: #999; }
 .turn-dot.black { background: #222;    border-color: #555; }
-.turn-dot.draw  { background: #7ab8ff; border-color: #5090cc; }
+.turn-dot.draw  { background: var(--color-info); border-color: #5090cc; }
 
 .game-status {
     font-size: 0.82rem;
@@ -156,7 +158,7 @@
 
 .game-status.check     { color: #f0b429; }
 .game-status.checkmate { color: var(--color-primary); }
-.game-status.draw      { color: #7ab8ff; }
+.game-status.draw      { color: var(--color-info); }
 
 /* ===== 수순 카드 ===== */
 .history-card {
@@ -201,7 +203,7 @@
     transition: background 0.1s;
 }
 
-.history-row:hover { background: rgba(255,255,255,0.04); }
+.history-row:hover { background: rgba(var(--overlay-rgb), 0.04); }
 
 .h-num {
     color: var(--color-text-muted);
@@ -218,7 +220,7 @@
 }
 
 .h-move.latest {
-    background: rgba(226, 185, 111, 0.15);
+    background: rgba(var(--color-primary-rgb), 0.15);
     color: var(--color-primary);
     font-weight: 700;
 }
