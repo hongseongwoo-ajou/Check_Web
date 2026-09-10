@@ -13,4 +13,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Render app
-        run: curl -sf -o /dev/null -w "status: %{http_code}\n" https://check-web-n84i.onrender.com/health
+        run: |
+          curl -sf -o /dev/null -w "status: %{http_code}\n" https://check-web-n84i.onrender.com/health
