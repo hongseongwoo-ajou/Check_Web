@@ -182,6 +182,8 @@ def init_db():
                 is_official INTEGER NOT NULL DEFAULT 1,
                 note        TEXT,
                 folder_id   INTEGER,
+                player1_rating INTEGER,
+                player2_rating INTEGER,
                 played_at   TEXT    DEFAULT (datetime('now', '+9 hours')),
                 FOREIGN KEY (group_id)    REFERENCES groups(id),
                 FOREIGN KEY (poll_id)     REFERENCES polls(id),
@@ -217,8 +219,9 @@ def init_db():
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS poll_votes (
-                poll_id  INTEGER NOT NULL,
-                user_id  INTEGER NOT NULL,
+                poll_id        INTEGER NOT NULL,
+                user_id        INTEGER NOT NULL,
+                rating_at_vote INTEGER,
                 voted_at TEXT    DEFAULT (datetime('now', '+9 hours')),
                 PRIMARY KEY (poll_id, user_id),
                 FOREIGN KEY (poll_id) REFERENCES polls(id),
@@ -290,6 +293,9 @@ def migrate_db():
         "ALTER TABLE matches ADD COLUMN note TEXT",
         "ALTER TABLE matches ADD COLUMN folder_id INTEGER",
         "ALTER TABLE polls ADD COLUMN is_official INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE matches ADD COLUMN player1_rating INTEGER",
+        "ALTER TABLE matches ADD COLUMN player2_rating INTEGER",
+        "ALTER TABLE poll_votes ADD COLUMN rating_at_vote INTEGER",
         """CREATE TABLE IF NOT EXISTS match_folders (
                id         INTEGER PRIMARY KEY AUTOINCREMENT,
                group_id   INTEGER NOT NULL,
@@ -1332,6 +1338,7 @@ async def get_group_matches(group_id: int, user=Depends(get_current_user)):
 
         matches = conn.execute(
             """SELECT m.id, m.played_at, m.pgn_data, m.is_official, m.note,
+                      m.player1_rating, m.player2_rating,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -1404,6 +1411,7 @@ async def get_poll_matches(poll_id: int, user=Depends(get_current_user)):
 
         matches = conn.execute(
             """SELECT m.id, m.played_at, m.pgn_data,
+                      m.player1_rating, m.player2_rating,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -1472,7 +1480,7 @@ async def get_active_polls(group_id: int, user=Depends(get_current_user)):
         result = []
         for poll in polls:
             votes = conn.execute(
-                """SELECT pv.user_id, u.nickname, pv.voted_at
+                """SELECT pv.user_id, u.nickname, pv.voted_at, pv.rating_at_vote
                    FROM poll_votes pv
                    JOIN users u ON pv.user_id = u.id
                    WHERE pv.poll_id = ?
@@ -1484,6 +1492,7 @@ async def get_active_polls(group_id: int, user=Depends(get_current_user)):
             if poll["status"] == "playing":
                 rows = conn.execute(
                     """SELECT m.id, m.status, m.winner_id, m.pgn_data,
+                              m.player1_rating, m.player2_rating,
                               p1.id AS player1_id, p1.nickname AS player1_nickname,
                               p2.id AS player2_id, p2.nickname AS player2_nickname,
                               w.nickname AS winner_nickname
@@ -1533,9 +1542,12 @@ async def toggle_vote(poll_id: int, user=Depends(get_current_user)):
                 )
                 voted = False
             else:
+                voter_rating = conn.execute(
+                    "SELECT rating_rapid FROM users WHERE id = ?", (user["id"],)
+                ).fetchone()["rating_rapid"]
                 conn.execute(
-                    "INSERT INTO poll_votes (poll_id, user_id) VALUES (?, ?)",
-                    (poll_id, user["id"]),
+                    "INSERT INTO poll_votes (poll_id, user_id, rating_at_vote) VALUES (?, ?, ?)",
+                    (poll_id, user["id"], voter_rating),
                 )
                 voted = True
             conn.commit()
@@ -1612,9 +1624,12 @@ async def close_poll(poll_id: int, user=Depends(get_current_user)):
 
         for p1, p2 in pairs:
             conn.execute(
-                """INSERT INTO matches (group_id, poll_id, player1_id, player2_id, recorded_by, status, is_official)
-                   VALUES (?, ?, ?, ?, ?, 'playing', ?)""",
-                (poll["group_id"], poll_id, p1["id"], p2["id"], user["id"], poll["is_official"]),
+                """INSERT INTO matches
+                   (group_id, poll_id, player1_id, player2_id, recorded_by, status, is_official,
+                    player1_rating, player2_rating)
+                   VALUES (?, ?, ?, ?, ?, 'playing', ?, ?, ?)""",
+                (poll["group_id"], poll_id, p1["id"], p2["id"], user["id"], poll["is_official"],
+                 p1["rating_rapid"], p2["rating_rapid"]),
             )
 
         conn.execute("UPDATE polls SET status = 'playing' WHERE id = ?", (poll_id,))
@@ -1658,20 +1673,21 @@ async def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get
             None
         )
 
-        nicks = {
-            row["id"]: row["nickname"]
-            for row in conn.execute(
-                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
-                (req.player1_id, req.player2_id),
-            ).fetchall()
-        }
+        player_rows = conn.execute(
+            "SELECT id, nickname, rating_rapid FROM users WHERE id IN (?, ?)",
+            (req.player1_id, req.player2_id),
+        ).fetchall()
+        nicks   = {row["id"]: row["nickname"] for row in player_rows}
+        ratings = {row["id"]: row["rating_rapid"] for row in player_rows}
         result_str = {"p1_win": f"{nicks[req.player1_id]} 승", "p2_win": f"{nicks[req.player2_id]} 승", "draw": "무승부"}[req.result]
 
         conn.execute(
             """INSERT INTO matches
-               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official)
-               VALUES (?, ?, ?, ?, ?, ?, 'finished', ?)""",
-            (poll["group_id"], poll_id, req.player1_id, req.player2_id, winner_id, user["id"], poll["is_official"]),
+               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official,
+                player1_rating, player2_rating)
+               VALUES (?, ?, ?, ?, ?, ?, 'finished', ?, ?, ?)""",
+            (poll["group_id"], poll_id, req.player1_id, req.player2_id, winner_id, user["id"], poll["is_official"],
+             ratings[req.player1_id], ratings[req.player2_id]),
         )
         _log(conn, poll["group_id"], user["id"], "경기_추가",
              f"'{poll['title']}': {nicks[req.player1_id]}(백) vs {nicks[req.player2_id]}(흑) — {result_str}")
@@ -1708,20 +1724,21 @@ async def record_friendly_match(group_id: int, req: FriendlyMatchRequest, user=D
             None
         )
 
-        nicks = {
-            row["id"]: row["nickname"]
-            for row in conn.execute(
-                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
-                (req.player1_id, req.player2_id),
-            ).fetchall()
-        }
+        player_rows = conn.execute(
+            "SELECT id, nickname, rating_rapid FROM users WHERE id IN (?, ?)",
+            (req.player1_id, req.player2_id),
+        ).fetchall()
+        nicks   = {row["id"]: row["nickname"] for row in player_rows}
+        ratings = {row["id"]: row["rating_rapid"] for row in player_rows}
         result_str = {"p1_win": f"{nicks[req.player1_id]} 승", "p2_win": f"{nicks[req.player2_id]} 승", "draw": "무승부"}[req.result]
 
         cursor = conn.execute(
             """INSERT INTO matches
-               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official, note)
-               VALUES (?, NULL, ?, ?, ?, ?, 'finished', 0, ?)""",
-            (group_id, req.player1_id, req.player2_id, winner_id, user["id"], req.note.strip()),
+               (group_id, poll_id, player1_id, player2_id, winner_id, recorded_by, status, is_official, note,
+                player1_rating, player2_rating)
+               VALUES (?, NULL, ?, ?, ?, ?, 'finished', 0, ?, ?, ?)""",
+            (group_id, req.player1_id, req.player2_id, winner_id, user["id"], req.note.strip(),
+             ratings[req.player1_id], ratings[req.player2_id]),
         )
         match_id = cursor.lastrowid
         _log(conn, group_id, user["id"], "친선경기_기록",
@@ -1822,6 +1839,7 @@ async def get_folder_matches(folder_id: int, user=Depends(get_current_user)):
 
         matches = conn.execute(
             """SELECT m.id, m.played_at, m.note,
+                      m.player1_rating, m.player2_rating,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -1849,6 +1867,7 @@ async def list_friendly_matches(group_id: int, user=Depends(get_current_user)):
 
         matches = conn.execute(
             """SELECT m.id, m.played_at, m.note, m.folder_id, f.name AS folder_name,
+                      m.player1_rating, m.player2_rating,
                       p1.id AS player1_id, p1.nickname AS player1_nickname,
                       p2.id AS player2_id, p2.nickname AS player2_nickname,
                       w.id AS winner_id, w.nickname AS winner_nickname
@@ -2231,10 +2250,14 @@ async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_curr
 
         all_ids = {match["player1_id"], match["player2_id"], req.player1_id, req.player2_id}
         nick_rows = conn.execute(
-            f"SELECT id, nickname FROM users WHERE id IN ({','.join('?'*len(all_ids))})",
+            f"SELECT id, nickname, rating_rapid FROM users WHERE id IN ({','.join('?'*len(all_ids))})",
             list(all_ids),
         ).fetchall()
-        nicks = {r["id"]: r["nickname"] for r in nick_rows}
+        nicks   = {r["id"]: r["nickname"] for r in nick_rows}
+        ratings = {r["id"]: r["rating_rapid"] for r in nick_rows}
+        # 선수가 그대로면 기존에 기록된 당시 레이팅을 보존하고, 선수가 바뀐 자리만 현재 레이팅으로 새로 스냅샷
+        player1_rating = match["player1_rating"] if req.player1_id == match["player1_id"] else ratings.get(req.player1_id)
+        player2_rating = match["player2_rating"] if req.player2_id == match["player2_id"] else ratings.get(req.player2_id)
 
         def _result_label(p1_id, p2_id, w_id, st):
             if st == "playing": return "미입력"
@@ -2258,8 +2281,10 @@ async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_curr
         after = f"{nicks.get(req.player1_id,'?')}(백) vs {nicks.get(req.player2_id,'?')}(흑) {after_result}"
 
         conn.execute(
-            "UPDATE matches SET player1_id=?, player2_id=?, winner_id=?, status=? WHERE id=?",
-            (req.player1_id, req.player2_id, winner_id, status, match_id),
+            """UPDATE matches
+               SET player1_id=?, player2_id=?, winner_id=?, status=?, player1_rating=?, player2_rating=?
+               WHERE id=?""",
+            (req.player1_id, req.player2_id, winner_id, status, player1_rating, player2_rating, match_id),
         )
 
         if match["poll_id"]:
