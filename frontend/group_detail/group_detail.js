@@ -775,6 +775,11 @@ function renderPollSection(pollDataArray) {
         btn.addEventListener('click', () => openEditMatchModal(parseInt(btn.dataset.matchId)));
     });
 
+    // 경기 기록 삭제 (관리자 전용)
+    section.querySelectorAll('.btn-delete-match').forEach(btn => {
+        btn.addEventListener('click', () => deleteMatch(parseInt(btn.dataset.matchId)));
+    });
+
     // 경기 추가 (매치 관리 — 관리자 전용)
     section.querySelectorAll('.btn-add-match-active').forEach(btn => {
         btn.addEventListener('click', () => openAddMatchModal(parseInt(btn.dataset.pollId), 'active'));
@@ -854,7 +859,6 @@ function buildPlayingCard(poll, matches, votes = []) {
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
             const hasPgn  = !!m.pgn_data;
-            const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
             const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
             return `
                 <div class="match-card finished">
@@ -866,9 +870,10 @@ function buildPlayingCard(poll, matches, votes = []) {
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
                         ${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}
                     </span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>
+                    <button class="btn-delete-match" data-match-id="${m.id}">${t('groupDetail.deleteMatch')}</button>` : ''}
                     <div class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
                         ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
                     </div>
                 </div>`;
@@ -1051,7 +1056,6 @@ function renderPollMatches(pollId) {
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
             const hasPgn  = !!m.pgn_data;
-            const canEdit = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
             const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
 
             return `
@@ -1062,9 +1066,10 @@ function renderPollMatches(pollId) {
                         <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </span>
                     <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('common.edit')}</button>` : ''}
+                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('common.edit')}</button>
+                    <button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
                     <span class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
                         ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
                     </span>
                 </div>`;
@@ -1077,6 +1082,9 @@ function renderPollMatches(pollId) {
         });
         body.querySelectorAll('.btn-edit-match').forEach(btn => {
             btn.addEventListener('click', () => openEditMatchModal(parseInt(btn.dataset.matchId), pollId));
+        });
+        body.querySelectorAll('.btn-delete-match').forEach(btn => {
+            btn.addEventListener('click', () => deleteMatch(parseInt(btn.dataset.matchId)));
         });
     }
 
@@ -1132,7 +1140,6 @@ function renderRecentMatches(matches) {
         const p2Win    = m.winner_id === m.player2_id;
         const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
         const hasPgn   = !!m.pgn_data;
-        const canEdit  = currentUserId === m.player1_id || currentUserId === m.player2_id || isAdmin();
         const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
         return `
             <div class="recent-match-item">
@@ -1145,8 +1152,9 @@ function renderRecentMatches(matches) {
                     </span>
                     <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
                     <span class="match-pgn-actions">
-                        ${canEdit ? `<button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>` : ''}
+                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
                         ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
+                        ${isAdmin() ? `<button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
                     </span>
                     <span class="recent-match-date">${formatDate(m.played_at)}</span>
                 </div>
@@ -1159,6 +1167,9 @@ function renderRecentMatches(matches) {
             const mid = parseInt(btn.dataset.matchId);
             openPgnModal(mid, matchDataCache[mid]?.pgn_data || '');
         });
+    });
+    el.querySelectorAll('.btn-delete-match').forEach(btn => {
+        btn.addEventListener('click', () => deleteMatch(parseInt(btn.dataset.matchId)));
     });
     el.querySelectorAll('.btn-pgn-view').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1427,9 +1438,14 @@ function renderFolderMatches(folderId) {
                 </span>
                 <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
                 <span class="recent-match-date">${formatDate(m.played_at)}</span>
+                ${isAdmin() ? `<button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
                 ${noteHtml}
             </div>`;
     }).join('');
+
+    body.querySelectorAll('.btn-delete-match').forEach(btn => {
+        btn.addEventListener('click', () => deleteMatch(parseInt(btn.dataset.matchId), folderId));
+    });
 }
 
 async function renameFolder(folderId) {
@@ -1586,6 +1602,22 @@ async function deletePoll(pollId) {
     } else {
         alert(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
+}
+
+async function deleteMatch(matchId, folderId = null) {
+    if (!confirm(t('groupDetail.confirmDeleteMatch'))) return;
+    const result = await apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' });
+    if (!result?.ok) {
+        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
+        return;
+    }
+    if (folderId) {
+        const folderResult = await apiFetch(`/api/friendly-folders/${folderId}/matches`);
+        folderMatchCache[folderId] = folderResult?.ok ? folderResult.data.matches : [];
+        renderFolderMatches(folderId);
+        if (isAdmin()) await loadManageMatches();
+    }
+    await refreshPage();
 }
 
 async function toggleVote(pollId, btn) {
@@ -2087,6 +2119,7 @@ const ACTION_KEY_MAP = {
     '경기_결과수정': 'matchResultEdit',
     '경기_수정':     'matchEdit',
     '경기_추가':     'matchAdd',
+    '경기_삭제':     'matchDelete',
     '친선경기_기록': 'friendlyRecord',
     '폴더_생성':     'folderCreate',
     '폴더_수정':     'folderEdit',
@@ -2105,6 +2138,7 @@ const ACTION_COLORS = {
     '경기_결과수정': '#f0a04b',
     '경기_수정':     '#f0a04b',
     '경기_추가':     '#4caf87',
+    '경기_삭제':     '#e07070',
     '친선경기_기록': '#6fcf97',
     '폴더_생성':     '#7b9ed4',
     '폴더_수정':     '#f0a04b',

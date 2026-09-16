@@ -871,6 +871,25 @@
     border-color: var(--color-primary);
 }
 
+.btn-delete-match {
+    padding: 0.18rem 0.5rem;
+    background: transparent;
+    border: 1px solid rgba(var(--color-danger-rgb), 0.4);
+    border-radius: var(--radius);
+    color: var(--color-danger);
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-delete-match:hover {
+    background: rgba(var(--color-danger-rgb), 0.1);
+    border-color: var(--color-danger);
+}
+
 /* 아코디언 내부용 — 더 작게 */
 .btn-modify-result.acc-modify {
     font-size: 0.65rem;

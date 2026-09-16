@@ -2208,14 +2208,11 @@ async def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(ge
         if not match:
             raise HTTPException(status_code=404, detail="매치를 찾을 수 없습니다.")
 
-        is_player = user["id"] in (match["player1_id"], match["player2_id"])
-        if not is_player:
-            role_row = conn.execute(
-                "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
-                (user["id"], match["group_id"]),
-            ).fetchone()
-            if not role_row or role_row["role"] not in ("방장", "임원"):
-                raise HTTPException(status_code=403, detail="권한이 없습니다. 경기 당사자 또는 임원/방장만 기보를 저장할 수 있습니다.")
+        if not conn.execute(
+            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], match["group_id"]),
+        ).fetchone():
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버만 기보를 저장할 수 있습니다.")
 
         pgn = req.pgn_data.strip()
         if not pgn:
@@ -2304,11 +2301,49 @@ async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_curr
     return {"message": "경기 정보가 수정되었습니다."}
 
 
+@app.delete("/api/matches/{match_id}")
+async def delete_match(match_id: int, user=Depends(get_current_user)):
+    """경기 기록 삭제. 방장/임원만 가능."""
+    with get_db() as conn:
+        match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if not match:
+            raise HTTPException(status_code=404, detail="매치를 찾을 수 없습니다.")
+
+        _check_admin(conn, user["id"], match["group_id"])  # 방장/임원만 가능
+
+        nicks = {
+            row["id"]: row["nickname"]
+            for row in conn.execute(
+                "SELECT id, nickname FROM users WHERE id IN (?, ?)",
+                (match["player1_id"], match["player2_id"]),
+            ).fetchall()
+        }
+        p1n = nicks.get(match["player1_id"], "?")
+        p2n = nicks.get(match["player2_id"], "?")
+
+        conn.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+
+        if match["poll_id"]:
+            remaining = conn.execute(
+                "SELECT COUNT(*) FROM matches WHERE poll_id = ? AND status = 'playing'",
+                (match["poll_id"],),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE polls SET status = ? WHERE id = ?",
+                ("finished" if remaining == 0 else "playing", match["poll_id"]),
+            )
+
+        _log(conn, match["group_id"], user["id"], "경기_삭제", f"{p1n}(백) vs {p2n}(흑) 경기 삭제")
+        conn.commit()
+
+    return {"message": "경기 기록이 삭제되었습니다."}
+
+
 # ---------- 활동 로그 ----------
 
 VALID_LOG_ACTIONS = {
     "투표_종료", "투표_재개", "투표_삭제",
-    "경기_결과기록", "경기_결과수정", "경기_수정", "경기_추가",
+    "경기_결과기록", "경기_결과수정", "경기_수정", "경기_추가", "경기_삭제",
     "멤버_강퇴", "역할_변경",
 }
 
