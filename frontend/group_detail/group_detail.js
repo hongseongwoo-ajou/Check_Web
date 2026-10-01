@@ -878,6 +878,7 @@ function buildPlayingCard(poll, matches, votes = []) {
                     </div>
                 </div>`;
         }
+        const isParticipant = currentUserId === m.player1_id || currentUserId === m.player2_id;
         return `
             <div class="match-card">
                 <div class="match-vs">
@@ -885,13 +886,13 @@ function buildPlayingCard(poll, matches, votes = []) {
                     <span class="vs-label">vs</span>
                     <span class="match-player"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                 </div>
-                ${isAdmin() ? `
+                ${(isAdmin() || isParticipant) ? `
                     <button class="btn-record-result"
                         data-match-id="${m.id}"
                         data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
                         data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">${t('groupDetail.finishMatch')}</button>
-                    <button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>
                 ` : ''}
+                ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>` : ''}
             </div>`;
     }).join('');
 

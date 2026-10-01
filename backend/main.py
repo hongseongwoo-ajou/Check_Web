@@ -2160,7 +2160,9 @@ async def record_match_result(match_id: int, req: MatchResultRequest, user=Depen
         if not match:
             raise HTTPException(status_code=404, detail="매치를 찾을 수 없습니다.")
 
-        _check_admin(conn, user["id"], match["group_id"])  # 방장/임원만 가능
+        is_player = user["id"] in (match["player1_id"], match["player2_id"])
+        if not is_player:
+            _check_admin(conn, user["id"], match["group_id"])  # 방장/임원 또는 경기 당사자만 가능
 
         if req.winner_id is not None and req.winner_id not in (match["player1_id"], match["player2_id"]):
             raise HTTPException(status_code=400, detail="승자는 해당 매치의 선수여야 합니다.")
