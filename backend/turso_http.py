@@ -5,6 +5,12 @@ No native compilation needed — pure Python + requests.
 from collections.abc import Mapping
 import sqlite3
 import requests
+from requests.adapters import HTTPAdapter
+
+# 프로세스 전체에서 공유하는 세션: 쿼리마다 TCP/TLS 연결을 새로 맺지 않고 keep-alive로 재사용.
+# 핸들러가 스레드풀에서 동시에 실행되므로 풀 크기를 넉넉히 잡는다.
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(pool_connections=4, pool_maxsize=32))
 
 
 def _parse_val(v):
@@ -108,7 +114,7 @@ class TursoConnection:
                 {"type": "execute", "stmt": s} for s in stmts
             ] + [{"type": "close"}]
         }
-        resp = requests.post(
+        resp = _session.post(
             self._pipeline_url,
             headers={"Authorization": self._auth, "Content-Type": "application/json"},
             json=payload,

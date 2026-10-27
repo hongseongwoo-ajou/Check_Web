@@ -678,17 +678,17 @@ class CreateAnnouncementRequest(BaseModel):
 # ---------- 인증 ----------
 
 @app.get("/health")
-async def health_check():
+def health_check():
     return {"status": "ok", "message": "체스 동아리 서버 가동 중"}
 
 
 @app.get("/")
-async def root():
+def root():
     return RedirectResponse(url="/index/index.html")
 
 
 @app.post("/auth/register")
-async def register(req: RegisterRequest):
+def register(req: RegisterRequest):
     if not USERNAME_RE.match(req.username):
         raise HTTPException(status_code=400, detail="아이디는 영문, 숫자, 한글, 밑줄(_)만 사용할 수 있습니다.")
 
@@ -707,7 +707,7 @@ async def register(req: RegisterRequest):
 
 @app.post("/auth/login")
 @limiter.limit("10/minute")
-async def login(request: Request, req: LoginRequest, background_tasks: BackgroundTasks):
+def login(request: Request, req: LoginRequest, background_tasks: BackgroundTasks):
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?",
@@ -740,7 +740,7 @@ async def login(request: Request, req: LoginRequest, background_tasks: Backgroun
 
 
 @app.post("/auth/logout")
-async def logout(user=Depends(get_current_user)):
+def logout(user=Depends(get_current_user)):
     with get_db() as conn:
         conn.execute(
             "UPDATE users SET token = NULL, token_expires_at = NULL WHERE id = ?",
@@ -753,7 +753,7 @@ async def logout(user=Depends(get_current_user)):
 # ---------- 유저 ----------
 
 @app.get("/api/me")
-async def get_me(user=Depends(get_current_user)):
+def get_me(user=Depends(get_current_user)):
     return {
         "id": user["id"],
         "username": user["username"],
@@ -765,7 +765,7 @@ async def get_me(user=Depends(get_current_user)):
 
 
 @app.get("/api/me/stats")
-async def get_my_stats(user=Depends(get_current_user)):
+def get_my_stats(user=Depends(get_current_user)):
     """
     로그인한 사용자의 전체(모든 그룹, 공식+친선) 경기 데이터를 집계해
     마이페이지 통계 대시보드에 필요한 지표를 반환.
@@ -800,14 +800,19 @@ async def get_my_stats(user=Depends(get_current_user)):
                 s["losses"] += 1
 
         rival_ids = sorted(rival_stats, key=lambda k: (-rival_stats[k]["played"], k))[:5]
+        # 라이벌 + 최근 10경기 상대 닉네임을 한 번에 조회
+        recent_opp_ids = [
+            m["player2_id"] if m["player1_id"] == uid else m["player1_id"] for m in matches[:10]
+        ]
+        lookup_ids = list(set(rival_ids) | set(recent_opp_ids))
         nicknames = {}
-        if rival_ids:
-            placeholders = ",".join("?" for _ in rival_ids)
+        if lookup_ids:
+            placeholders = ",".join("?" for _ in lookup_ids)
             nicknames = {
                 row["id"]: row["nickname"]
                 for row in conn.execute(
                     f"SELECT id, nickname FROM users WHERE id IN ({placeholders})",
-                    rival_ids,
+                    lookup_ids,
                 ).fetchall()
             }
         rivals = [
@@ -819,10 +824,7 @@ async def get_my_stats(user=Depends(get_current_user)):
         recent_form = []
         for m in reversed(matches[:10]):
             opp_id = m["player2_id"] if m["player1_id"] == uid else m["player1_id"]
-            opp_nick = nicknames.get(opp_id)
-            if opp_nick is None:
-                row = conn.execute("SELECT nickname FROM users WHERE id = ?", (opp_id,)).fetchone()
-                opp_nick = row["nickname"] if row else "알 수 없음"
+            opp_nick = nicknames.get(opp_id, "알 수 없음")
             if m["winner_id"] == uid:
                 result = "win"
             elif m["winner_id"] is None:
@@ -848,7 +850,7 @@ async def get_my_stats(user=Depends(get_current_user)):
 
 
 @app.patch("/api/me/profile")
-async def update_profile(req: UpdateProfileRequest, user=Depends(get_current_user)):
+def update_profile(req: UpdateProfileRequest, user=Depends(get_current_user)):
     nickname = req.nickname.strip()
     if len(nickname) < 1:
         raise HTTPException(status_code=400, detail="닉네임을 입력해주세요.")
@@ -859,7 +861,7 @@ async def update_profile(req: UpdateProfileRequest, user=Depends(get_current_use
 
 
 @app.patch("/api/me/password")
-async def update_password(req: UpdatePasswordRequest, user=Depends(get_current_user)):
+def update_password(req: UpdatePasswordRequest, user=Depends(get_current_user)):
     if not _verify_password(req.current_password, user["password"]):
         raise HTTPException(status_code=400, detail="현재 비밀번호가 일치하지 않습니다.")
     with get_db() as conn:
@@ -872,7 +874,7 @@ async def update_password(req: UpdatePasswordRequest, user=Depends(get_current_u
 
 
 @app.post("/api/me/chess/refresh")
-async def refresh_chess_rating(user=Depends(get_current_user)):
+def refresh_chess_rating(user=Depends(get_current_user)):
     """Chess.com 레이팅을 동기적으로 즉시 조회·저장하고 결과를 반환."""
     chess_username = user["chess_username"]
     if not chess_username:
@@ -910,7 +912,7 @@ async def refresh_chess_rating(user=Depends(get_current_user)):
 
 
 @app.get("/api/me/chess/rating-trend")
-async def get_my_rating_trend(period: str = "30d", refresh: bool = False, user=Depends(get_current_user)):
+def get_my_rating_trend(period: str = "30d", refresh: bool = False, user=Depends(get_current_user)):
     """
     Chess.com 실제 대국 기록(래피드)에서 레이팅 추이를 뽑아 기간별로 반환.
     전체 기간 데이터는 그룹당 1시간 캐시하고, period 파라미터로 그 중 일부만 잘라 응답.
@@ -974,7 +976,7 @@ async def get_my_rating_trend(period: str = "30d", refresh: bool = False, user=D
 
 
 @app.patch("/api/me/chess")
-async def update_chess_username(
+def update_chess_username(
     req: UpdateChessRequest,
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
@@ -1002,7 +1004,7 @@ async def update_chess_username(
 # ---------- 그룹 ----------
 
 @app.get("/api/groups")
-async def list_groups(user=Depends(get_current_user)):
+def list_groups(user=Depends(get_current_user)):
     with get_db() as conn:
         rows = conn.execute(
             """SELECT g.id, g.name, g.invite_code, u.nickname AS owner_nickname,
@@ -1017,7 +1019,7 @@ async def list_groups(user=Depends(get_current_user)):
 
 
 @app.post("/api/groups", status_code=201)
-async def create_group(req: CreateGroupRequest, user=Depends(get_current_user)):
+def create_group(req: CreateGroupRequest, user=Depends(get_current_user)):
     if len(req.name.strip()) < 2:
         raise HTTPException(status_code=400, detail="그룹 이름은 2자 이상이어야 합니다.")
 
@@ -1039,7 +1041,7 @@ async def create_group(req: CreateGroupRequest, user=Depends(get_current_user)):
 
 
 @app.post("/api/groups/join")
-async def join_group(req: JoinGroupRequest, user=Depends(get_current_user)):
+def join_group(req: JoinGroupRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         group = conn.execute(
             "SELECT * FROM groups WHERE invite_code = ?",
@@ -1070,7 +1072,7 @@ async def join_group(req: JoinGroupRequest, user=Depends(get_current_user)):
 
 
 @app.delete("/api/groups/{group_id}")
-async def delete_group(group_id: int, user=Depends(get_current_user)):
+def delete_group(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         row = conn.execute(
             "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1103,7 +1105,7 @@ async def delete_group(group_id: int, user=Depends(get_current_user)):
 
 
 @app.delete("/api/groups/{group_id}/members/{member_id}")
-async def kick_member(group_id: int, member_id: int, user=Depends(get_current_user)):
+def kick_member(group_id: int, member_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         my_row = conn.execute(
             "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1145,7 +1147,7 @@ async def kick_member(group_id: int, member_id: int, user=Depends(get_current_us
 # ---------- 그룹 멤버 ----------
 
 @app.get("/api/groups/{group_id}/members")
-async def get_group_members(group_id: int, user=Depends(get_current_user)):
+def get_group_members(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1196,7 +1198,7 @@ async def get_group_members(group_id: int, user=Depends(get_current_user)):
 # ---------- 멤버 역할 변경 ----------
 
 @app.patch("/api/groups/{group_id}/members/{member_id}/role")
-async def update_member_role(
+def update_member_role(
     group_id: int,
     member_id: int,
     req: UpdateMemberRoleRequest,
@@ -1245,7 +1247,7 @@ async def update_member_role(
 # ---------- 공지사항 ----------
 
 @app.get("/api/groups/{group_id}/announcements/latest")
-async def get_latest_announcement(group_id: int, user=Depends(get_current_user)):
+def get_latest_announcement(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1267,7 +1269,7 @@ async def get_latest_announcement(group_id: int, user=Depends(get_current_user))
 
 
 @app.get("/api/groups/{group_id}/announcements")
-async def list_announcements(group_id: int, user=Depends(get_current_user)):
+def list_announcements(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1288,7 +1290,7 @@ async def list_announcements(group_id: int, user=Depends(get_current_user)):
 
 
 @app.post("/api/groups/{group_id}/announcements", status_code=201)
-async def create_announcement(group_id: int, req: CreateAnnouncementRequest, user=Depends(get_current_user)):
+def create_announcement(group_id: int, req: CreateAnnouncementRequest, user=Depends(get_current_user)):
     title   = req.title.strip()
     content = req.content.strip()
     if not title:
@@ -1309,7 +1311,7 @@ async def create_announcement(group_id: int, req: CreateAnnouncementRequest, use
 
 
 @app.delete("/api/announcements/{announcement_id}")
-async def delete_announcement(announcement_id: int, user=Depends(get_current_user)):
+def delete_announcement(announcement_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         ann = conn.execute("SELECT * FROM announcements WHERE id = ?", (announcement_id,)).fetchone()
         if not ann:
@@ -1324,7 +1326,7 @@ async def delete_announcement(announcement_id: int, user=Depends(get_current_use
 # ---------- 매치 ----------
 
 @app.get("/api/groups/{group_id}/matches")
-async def get_group_matches(group_id: int, user=Depends(get_current_user)):
+def get_group_matches(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1352,7 +1354,7 @@ async def get_group_matches(group_id: int, user=Depends(get_current_user)):
 
 
 @app.get("/api/groups/{group_id}/history")
-async def get_group_history(group_id: int, page: int = 1, user=Depends(get_current_user)):
+def get_group_history(group_id: int, page: int = 1, user=Depends(get_current_user)):
     """완료된 투표 목록을 10개씩 페이징하여 반환."""
     per_page = 10
     page     = max(1, page)
@@ -1393,7 +1395,7 @@ async def get_group_history(group_id: int, page: int = 1, user=Depends(get_curre
 
 
 @app.get("/api/polls/{poll_id}/matches")
-async def get_poll_matches(poll_id: int, user=Depends(get_current_user)):
+def get_poll_matches(poll_id: int, user=Depends(get_current_user)):
     """특정 투표의 완료된 경기 목록 반환 (lazy loading용)."""
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
@@ -1446,7 +1448,7 @@ def _log(conn, group_id: int, user_id: int, action: str, detail: str = ""):
 
 
 @app.post("/api/groups/{group_id}/polls", status_code=201)
-async def create_poll(group_id: int, req: CreatePollRequest, user=Depends(get_current_user)):
+def create_poll(group_id: int, req: CreatePollRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
         cursor = conn.execute(
@@ -1459,7 +1461,7 @@ async def create_poll(group_id: int, req: CreatePollRequest, user=Depends(get_cu
 
 
 @app.get("/api/groups/{group_id}/polls/active")
-async def get_active_polls(group_id: int, user=Depends(get_current_user)):
+def get_active_polls(group_id: int, user=Depends(get_current_user)):
     """활성 투표(voting/playing) 전체를 배열로 반환."""
     with get_db() as conn:
         if not conn.execute(
@@ -1512,7 +1514,7 @@ async def get_active_polls(group_id: int, user=Depends(get_current_user)):
 
 
 @app.post("/api/polls/{poll_id}/vote")
-async def toggle_vote(poll_id: int, user=Depends(get_current_user)):
+def toggle_vote(poll_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
         if not poll:
@@ -1554,7 +1556,7 @@ async def toggle_vote(poll_id: int, user=Depends(get_current_user)):
 
 
 @app.delete("/api/polls/{poll_id}/votes/{user_id}")
-async def cancel_member_vote(poll_id: int, user_id: int, user=Depends(get_current_user)):
+def cancel_member_vote(poll_id: int, user_id: int, user=Depends(get_current_user)):
     """방장/임원이 진행 중인 투표에서 특정 참가자의 투표를 강제로 취소."""
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
@@ -1587,7 +1589,7 @@ async def cancel_member_vote(poll_id: int, user_id: int, user=Depends(get_curren
 
 
 @app.post("/api/polls/{poll_id}/close")
-async def close_poll(poll_id: int, user=Depends(get_current_user)):
+def close_poll(poll_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
         if not poll:
@@ -1641,7 +1643,7 @@ async def close_poll(poll_id: int, user=Depends(get_current_user)):
 
 
 @app.post("/api/polls/{poll_id}/matches", status_code=201)
-async def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get_current_user)):
+def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get_current_user)):
     if req.result not in ("p1_win", "p2_win", "draw"):
         raise HTTPException(status_code=400, detail="결과는 p1_win, p2_win, draw 중 하나여야 합니다.")
     if req.player1_id == req.player2_id:
@@ -1693,7 +1695,7 @@ async def add_match_to_poll(poll_id: int, req: AddMatchRequest, user=Depends(get
 
 
 @app.post("/api/groups/{group_id}/matches/friendly", status_code=201)
-async def record_friendly_match(group_id: int, req: FriendlyMatchRequest, user=Depends(get_current_user)):
+def record_friendly_match(group_id: int, req: FriendlyMatchRequest, user=Depends(get_current_user)):
     """투표 절차 없이 친선 경기를 즉시 기록. 항상 is_official=False로 저장됨."""
     if req.result not in ("p1_win", "p2_win", "draw"):
         raise HTTPException(status_code=400, detail="결과는 p1_win, p2_win, draw 중 하나여야 합니다.")
@@ -1747,7 +1749,7 @@ async def record_friendly_match(group_id: int, req: FriendlyMatchRequest, user=D
 # ---------- 친선 경기 폴더 ----------
 
 @app.get("/api/groups/{group_id}/friendly-folders")
-async def list_friendly_folders(group_id: int, user=Depends(get_current_user)):
+def list_friendly_folders(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1771,7 +1773,7 @@ async def list_friendly_folders(group_id: int, user=Depends(get_current_user)):
 
 
 @app.post("/api/groups/{group_id}/friendly-folders", status_code=201)
-async def create_friendly_folder(group_id: int, req: CreateFolderRequest, user=Depends(get_current_user)):
+def create_friendly_folder(group_id: int, req: CreateFolderRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
         cursor = conn.execute(
@@ -1793,7 +1795,7 @@ def _get_folder_or_404(conn, folder_id: int):
 
 
 @app.put("/api/friendly-folders/{folder_id}")
-async def rename_friendly_folder(folder_id: int, req: RenameFolderRequest, user=Depends(get_current_user)):
+def rename_friendly_folder(folder_id: int, req: RenameFolderRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         folder = _get_folder_or_404(conn, folder_id)
         _check_admin(conn, user["id"], folder["group_id"])
@@ -1810,7 +1812,7 @@ async def rename_friendly_folder(folder_id: int, req: RenameFolderRequest, user=
 
 
 @app.delete("/api/friendly-folders/{folder_id}")
-async def delete_friendly_folder(folder_id: int, user=Depends(get_current_user)):
+def delete_friendly_folder(folder_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         folder = _get_folder_or_404(conn, folder_id)
         _check_admin(conn, user["id"], folder["group_id"])
@@ -1824,7 +1826,7 @@ async def delete_friendly_folder(folder_id: int, user=Depends(get_current_user))
 
 
 @app.get("/api/friendly-folders/{folder_id}/matches")
-async def get_folder_matches(folder_id: int, user=Depends(get_current_user)):
+def get_folder_matches(folder_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         folder = _get_folder_or_404(conn, folder_id)
         if not conn.execute(
@@ -1852,7 +1854,7 @@ async def get_folder_matches(folder_id: int, user=Depends(get_current_user)):
 
 
 @app.get("/api/groups/{group_id}/matches/friendly")
-async def list_friendly_matches(group_id: int, user=Depends(get_current_user)):
+def list_friendly_matches(group_id: int, user=Depends(get_current_user)):
     """직접 기록된(투표 없는) 친선 경기 전체 목록. 폴더 관리 UI에서 사용."""
     with get_db() as conn:
         if not conn.execute(
@@ -1881,7 +1883,7 @@ async def list_friendly_matches(group_id: int, user=Depends(get_current_user)):
 
 
 @app.post("/api/groups/{group_id}/friendly-matches/assign-folder")
-async def assign_matches_to_folder(group_id: int, req: AssignFolderRequest, user=Depends(get_current_user)):
+def assign_matches_to_folder(group_id: int, req: AssignFolderRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
 
@@ -1917,7 +1919,7 @@ async def assign_matches_to_folder(group_id: int, req: AssignFolderRequest, user
 
 
 @app.post("/api/polls/{poll_id}/reopen")
-async def reopen_poll(poll_id: int, user=Depends(get_current_user)):
+def reopen_poll(poll_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
         if not poll:
@@ -1933,7 +1935,7 @@ async def reopen_poll(poll_id: int, user=Depends(get_current_user)):
 
 
 @app.delete("/api/polls/{poll_id}")
-async def delete_poll(poll_id: int, user=Depends(get_current_user)):
+def delete_poll(poll_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
         if not poll:
@@ -1951,20 +1953,17 @@ async def delete_poll(poll_id: int, user=Depends(get_current_user)):
 # ---------- 순위표 ----------
 
 @app.get("/api/groups/{group_id}/leaderboard")
-async def get_leaderboard(group_id: int, user=Depends(get_current_user)):
+def get_leaderboard(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
-        if not conn.execute(
-            "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
-            (user["id"], group_id),
-        ).fetchone():
-            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
-
-        group = conn.execute("SELECT name FROM groups WHERE id = ?", (group_id,)).fetchone()
         current_role_row = conn.execute(
             "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
             (user["id"], group_id),
         ).fetchone()
-        current_role = current_role_row["role"] if current_role_row else "회원"
+        if not current_role_row:
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+        current_role = current_role_row["role"]
+
+        group = conn.execute("SELECT name FROM groups WHERE id = ?", (group_id,)).fetchone()
 
         s = conn.execute(
             "SELECT pts_win, pts_draw, pts_loss, is_color_automatic FROM group_settings WHERE group_id = ?",
@@ -1975,40 +1974,35 @@ async def get_leaderboard(group_id: int, user=Depends(get_current_user)):
         pts_loss           = s["pts_loss"]           if s else 1
         is_color_automatic = bool(s["is_color_automatic"]) if s else True
 
-        members = conn.execute(
-            """SELECT u.id, u.nickname, u.chess_username, u.rating_rapid
+        # 멤버별 전적을 쿼리 한 번으로 집계 (멤버 수만큼 DB 왕복하지 않도록)
+        rows = conn.execute(
+            """SELECT u.id, u.nickname, u.chess_username, u.rating_rapid,
+                      COUNT(m.id) AS played,
+                      COALESCE(SUM(m.winner_id = u.id), 0) AS wins,
+                      COALESCE(SUM(m.id IS NOT NULL AND m.winner_id IS NULL), 0) AS draws
                FROM users u
-               JOIN user_groups ug ON u.id = ug.user_id
-               WHERE ug.group_id = ?""",
+               JOIN user_groups ug ON u.id = ug.user_id AND ug.group_id = ?
+               LEFT JOIN matches m
+                      ON m.group_id = ug.group_id AND m.status = 'finished' AND m.is_official = 1
+                     AND (m.player1_id = u.id OR m.player2_id = u.id)
+               GROUP BY u.id""",
             (group_id,),
         ).fetchall()
 
         standings = []
-        for m in members:
-            uid = m["id"]
-            results = conn.execute(
-                """SELECT winner_id FROM matches
-                   WHERE group_id = ? AND status = 'finished' AND is_official = 1
-                     AND (player1_id = ? OR player2_id = ?)""",
-                (group_id, uid, uid),
-            ).fetchall()
-
-            played = len(results)
-            wins   = sum(1 for r in results if r["winner_id"] == uid)
-            draws  = sum(1 for r in results if r["winner_id"] is None)
+        for r in rows:
+            played, wins, draws = r["played"], r["wins"], r["draws"]
             losses = played - wins - draws
-            points = wins * pts_win + draws * pts_draw + losses * pts_loss
-
             standings.append({
-                "id": uid,
-                "nickname": m["nickname"],
-                "chess_username": m["chess_username"],
-                "rating_rapid": m["rating_rapid"],
+                "id": r["id"],
+                "nickname": r["nickname"],
+                "chess_username": r["chess_username"],
+                "rating_rapid": r["rating_rapid"],
                 "played": played,
                 "wins": wins,
                 "draws": draws,
                 "losses": losses,
-                "points": points,
+                "points": wins * pts_win + draws * pts_draw + losses * pts_loss,
             })
 
         standings.sort(key=lambda x: (-x["points"], -x["wins"], x["nickname"]))
@@ -2022,7 +2016,7 @@ async def get_leaderboard(group_id: int, user=Depends(get_current_user)):
 
 
 @app.get("/api/groups/{group_id}/members/{member_id}/profile")
-async def get_member_profile(group_id: int, member_id: int, user=Depends(get_current_user)):
+def get_member_profile(group_id: int, member_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -2109,7 +2103,7 @@ async def get_member_profile(group_id: int, member_id: int, user=Depends(get_cur
 
 
 @app.get("/api/groups/{group_id}/settings")
-async def get_group_settings(group_id: int, user=Depends(get_current_user)):
+def get_group_settings(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -2129,7 +2123,7 @@ async def get_group_settings(group_id: int, user=Depends(get_current_user)):
 
 
 @app.put("/api/groups/{group_id}/settings")
-async def update_group_settings(group_id: int, req: GroupSettingsRequest, user=Depends(get_current_user)):
+def update_group_settings(group_id: int, req: GroupSettingsRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
         conn.execute(
@@ -2150,7 +2144,7 @@ async def update_group_settings(group_id: int, req: GroupSettingsRequest, user=D
 
 
 @app.patch("/api/matches/{match_id}/result")
-async def record_match_result(match_id: int, req: MatchResultRequest, user=Depends(get_current_user)):
+def record_match_result(match_id: int, req: MatchResultRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
         if not match:
@@ -2200,7 +2194,7 @@ async def record_match_result(match_id: int, req: MatchResultRequest, user=Depen
 
 
 @app.patch("/api/matches/{match_id}/pgn")
-async def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(get_current_user)):
+def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(get_current_user)):
     with get_db() as conn:
         match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
         if not match:
@@ -2223,7 +2217,7 @@ async def update_match_pgn(match_id: int, req: UpdatePGNRequest, user=Depends(ge
 
 
 @app.put("/api/matches/{match_id}/edit")
-async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_current_user)):
+def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_current_user)):
     if req.result not in ("p1_win", "p2_win", "draw", "none"):
         raise HTTPException(status_code=400, detail="올바르지 않은 결과값입니다.")
     if req.player1_id == req.player2_id:
@@ -2300,7 +2294,7 @@ async def edit_match(match_id: int, req: EditMatchRequest, user=Depends(get_curr
 
 
 @app.delete("/api/matches/{match_id}")
-async def delete_match(match_id: int, user=Depends(get_current_user)):
+def delete_match(match_id: int, user=Depends(get_current_user)):
     """경기 기록 삭제. 방장/임원만 가능."""
     with get_db() as conn:
         match = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
@@ -2348,7 +2342,7 @@ VALID_LOG_ACTIONS = {
 }
 
 @app.get("/api/groups/{group_id}/activity-logs")
-async def get_activity_logs(
+def get_activity_logs(
     group_id: int,
     action: str = None,
     limit: int = 50,
@@ -2384,7 +2378,7 @@ async def get_activity_logs(
 # ---------- 대시보드 ----------
 
 @app.get("/api/dashboard")
-async def get_dashboard(group_id: int, user=Depends(get_current_user)):
+def get_dashboard(group_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
         # 요청자가 해당 그룹 멤버인지 확인
         if not conn.execute(

@@ -2071,11 +2071,14 @@ async function refreshPage() {
     openPollId     = null;
     pollMatchCache = {};
 
-    const [membersRes, pollRes, historyRes, meRes] = await Promise.all([
+    // 모든 요청을 한 번에 보내고, 역할(currentRole)이 정해진 뒤에 렌더링한다
+    const [membersRes, pollRes, historyRes, meRes, annRes, matchesRes] = await Promise.all([
         apiFetch(`/api/groups/${groupId}/members`),
         apiFetch(`/api/groups/${groupId}/polls/active`),
         apiFetch(`/api/groups/${groupId}/history?page=1`),
         apiFetch('/api/me'),
+        apiFetch(`/api/groups/${groupId}/announcements/latest`),
+        apiFetch(`/api/groups/${groupId}/matches`),
     ]);
 
     if (!membersRes?.ok) {
@@ -2104,7 +2107,13 @@ async function refreshPage() {
     if (pollRes?.ok)    renderPollSection(pollRes.data);
     if (historyRes?.ok) renderHistoryAccordion(historyRes.data);
 
-    await Promise.all([loadLatestAnnouncement(), loadRecentMatches()]);
+    renderLatestAnnouncement(annRes?.ok ? annRes.data : null);
+    if (matchesRes?.ok) {
+        renderRecentMatches(matchesRes.data);
+    } else {
+        document.getElementById('recent-matches').innerHTML =
+            `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
+    }
 
     document.getElementById('activity-log-btn-row')
         .classList.toggle('hidden', !isAdmin());
