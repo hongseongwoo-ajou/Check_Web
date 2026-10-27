@@ -291,6 +291,7 @@
     font-weight: 700;
     color: var(--color-text);
     margin: 0;
+    word-break: keep-all;   /* 한글 제목이 한 글자씩 끊기지 않도록 */
 }
 
 .bye-notice {
@@ -325,6 +326,8 @@
 /* 제목 + 버튼 행 (대진표 카드) */
 .card-head-row {
     display: flex;
+    flex-wrap: wrap;        /* 버튼이 많거나 글씨가 길면 버튼을 다음 줄로 */
+    gap: 0.6rem;
     align-items: center;
     justify-content: space-between;
     padding-bottom: 0.75rem;
@@ -611,12 +614,17 @@
 /* ===== 헤드 행 (제목 + 버튼) ===== */
 .head-left {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
+    flex: 1 1 12rem;        /* 제목 영역 최소 폭 확보 — 부족하면 버튼이 아래로 내려감 */
+    min-width: 0;
 }
 
 .head-buttons {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 0.5rem;
 }
@@ -1230,8 +1238,9 @@
 
 .member-item {
     display: flex;
+    flex-wrap: wrap;        /* 자리가 모자라면 레이팅·버튼이 다음 줄로 */
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.4rem 0.6rem;
     padding: 0.5rem 0.4rem;
     border-radius: var(--radius);
     transition: background 0.15s;
@@ -1254,7 +1263,7 @@
 }
 
 .member-name {
-    flex: 1;
+    flex: 1 1 7.5rem;       /* 이름+배지 최소 폭 확보 */
     font-weight: 600;
     color: var(--color-text);
     font-size: 0.9rem;
@@ -1263,6 +1272,15 @@
     gap: 0.35rem;
     min-width: 0;
 }
+
+.member-name .player-link {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.member-name .role-badge { flex-shrink: 0; }
 
 .member-rating {
     font-size: 0.82rem;
