@@ -86,6 +86,87 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
+// ===== 확인창·알림(토스트) — 브라우저 기본 confirm()/alert() 대체 =====
+
+let confirmModalEl = null;
+
+// 사이트 스타일 확인창. 확인 → true, 취소/바깥 클릭/Esc → false.
+// danger: 삭제·강퇴처럼 되돌리기 어려운 동작이면 빨간 확인 버튼 + 기본 포커스는 '취소'.
+function showConfirm(message, { danger = false, okText } = {}) {
+    if (!confirmModalEl) {
+        confirmModalEl = document.createElement('div');
+        confirmModalEl.className = 'modal confirm-modal hidden';
+        confirmModalEl.setAttribute('role', 'alertdialog');
+        confirmModalEl.setAttribute('aria-modal', 'true');
+        confirmModalEl.setAttribute('aria-describedby', 'confirm-modal-message');
+        confirmModalEl.innerHTML = `
+            <div class="modal-backdrop"></div>
+            <div class="modal-content confirm-dialog">
+                <p class="confirm-message" id="confirm-modal-message"></p>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel confirm-cancel"></button>
+                    <button type="button" class="confirm-ok"></button>
+                </div>
+            </div>`;
+        document.body.appendChild(confirmModalEl);
+    }
+    const el        = confirmModalEl;
+    const okBtn     = el.querySelector('.confirm-ok');
+    const cancelBtn = el.querySelector('.confirm-cancel');
+    el.querySelector('.confirm-message').textContent = message;
+    cancelBtn.textContent = t('common.cancel');
+    okBtn.textContent     = okText || t('common.confirm');
+    okBtn.className       = `confirm-ok ${danger ? 'btn-danger' : 'btn-primary'}`;
+
+    const prevFocus = document.activeElement;
+    el.classList.remove('hidden');
+    (danger ? cancelBtn : okBtn).focus();
+
+    return new Promise(resolve => {
+        const finish = (value) => {
+            el.classList.add('hidden');
+            el.removeEventListener('click', onClick);
+            document.removeEventListener('keydown', onKey, true);
+            if (prevFocus?.isConnected) prevFocus.focus();
+            resolve(value);
+        };
+        const onClick = (e) => {
+            if (e.target === okBtn) finish(true);
+            else if (e.target === cancelBtn || e.target.classList.contains('modal-backdrop')) finish(false);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+            if (e.key === 'Tab') {   // 포커스를 두 버튼 안에 가둠
+                e.preventDefault();
+                (document.activeElement === okBtn ? cancelBtn : okBtn).focus();
+            }
+        };
+        el.addEventListener('click', onClick);
+        document.addEventListener('keydown', onKey, true);
+    });
+}
+
+// 화면 아래에 잠깐 떴다 사라지는 알림. type: 'error' | 'info'
+function showToast(message, type = 'error') {
+    let box = document.getElementById('toast-container');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'toast-container';
+        box.className = 'toast-container';
+        box.setAttribute('aria-live', 'polite');
+        document.body.appendChild(box);
+    }
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    el.textContent = message;
+    box.appendChild(el);
+    setTimeout(() => {
+        el.classList.add('toast-hide');
+        setTimeout(() => el.remove(), 300);
+    }, type === 'error' ? 4500 : 3000);
+}
+
 function nameWithRating(nickname, rating) {
     return (rating === null || rating === undefined) ? nickname : `${nickname} (${rating})`;
 }
@@ -281,7 +362,7 @@ async function changeMemberRole(memberId, newRole) {
         ? t('groupDetail.confirmPromote', { name: displayName })
         : t('groupDetail.confirmDemote', { name: displayName });
 
-    if (!confirm(confirmMsg)) return;
+    if (!await showConfirm(confirmMsg, { danger: newRole !== '임원' })) return;
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}/role`, {
         method: 'PATCH',
@@ -291,12 +372,12 @@ async function changeMemberRole(memberId, newRole) {
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || t('groupDetail.roleChangeFailed'));
+        showToast(result?.data?.detail || t('groupDetail.roleChangeFailed'));
     }
 }
 
 async function kickMember(memberId, memberName) {
-    if (!confirm(t('groupDetail.confirmKick', { name: memberName }))) return;
+    if (!await showConfirm(t('groupDetail.confirmKick', { name: memberName }), { danger: true, okText: t('groupDetail.kick') })) return;
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}`, {
         method: 'DELETE',
@@ -305,7 +386,7 @@ async function kickMember(memberId, memberName) {
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || t('groupDetail.kickFailed'));
+        showToast(result?.data?.detail || t('groupDetail.kickFailed'));
     }
 }
 
@@ -428,7 +509,7 @@ function renderAnnouncementList() {
 }
 
 async function deleteAnnouncement(announcementId) {
-    if (!confirm(t('groupDetail.confirmDeleteAnnouncement'))) return;
+    if (!await showConfirm(t('groupDetail.confirmDeleteAnnouncement'), { danger: true, okText: t('common.delete') })) return;
 
     const result = await apiFetch(`/api/announcements/${announcementId}`, { method: 'DELETE' });
     if (result?.ok) {
@@ -436,7 +517,7 @@ async function deleteAnnouncement(announcementId) {
         renderAnnouncementList();
         await loadLatestAnnouncement();
     } else {
-        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
+        showToast(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
@@ -1255,7 +1336,7 @@ let selectedFriendlyResult = 'p1_win';
 
 function openFriendlyMatchModal() {
     if (currentMembers.length < 2) {
-        alert(t('groupDetail.needTwoMembers'));
+        showToast(t('groupDetail.needTwoMembers'), 'info');
         return;
     }
 
@@ -1528,12 +1609,12 @@ async function renameFolder(folderId) {
         renamingFolderId = null;
         await loadFolders();
     } else {
-        alert(result?.data?.detail || t('groupDetail.renameFailed'));
+        showToast(result?.data?.detail || t('groupDetail.renameFailed'));
     }
 }
 
 async function deleteFolder(folderId, folderName) {
-    if (!confirm(t('groupDetail.confirmDeleteFolder', { name: folderName }))) return;
+    if (!await showConfirm(t('groupDetail.confirmDeleteFolder', { name: folderName }), { danger: true, okText: t('common.delete') })) return;
 
     const result = await apiFetch(`/api/friendly-folders/${folderId}`, { method: 'DELETE' });
     if (result?.ok) {
@@ -1542,7 +1623,7 @@ async function deleteFolder(folderId, folderName) {
         await loadFolders();
         if (isAdmin()) await loadManageMatches();
     } else {
-        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
+        showToast(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
@@ -1663,20 +1744,20 @@ document.getElementById('btn-remove-from-folder').addEventListener('click', () =
 // ===== API 액션 =====
 
 async function deletePoll(pollId) {
-    if (!confirm(t('groupDetail.confirmDeletePoll'))) return;
+    if (!await showConfirm(t('groupDetail.confirmDeletePoll'), { danger: true, okText: t('common.delete') })) return;
     const result = await apiFetch(`/api/polls/${pollId}`, { method: 'DELETE' });
     if (result?.ok) {
         await refreshPage();
     } else {
-        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
+        showToast(result?.data?.detail || t('groupDetail.deleteFailed'));
     }
 }
 
 async function deleteMatch(matchId, folderId = null) {
-    if (!confirm(t('groupDetail.confirmDeleteMatch'))) return;
+    if (!await showConfirm(t('groupDetail.confirmDeleteMatch'), { danger: true, okText: t('common.delete') })) return;
     const result = await apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' });
     if (!result?.ok) {
-        alert(result?.data?.detail || t('groupDetail.deleteFailed'));
+        showToast(result?.data?.detail || t('groupDetail.deleteFailed'));
         return;
     }
     if (folderId) {
@@ -1695,12 +1776,12 @@ async function toggleVote(pollId, btn) {
         await refreshPoll();
     } else {
         if (btn) { btn.disabled = false; btn.textContent = btn.classList.contains('voted') ? t('groupDetail.cancelParticipation') : t('groupDetail.participate'); }
-        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
+        showToast(result?.data?.detail || t('groupDetail.errorOccurred'));
     }
 }
 
 async function cancelMemberVote(pollId, userId, userName, btn) {
-    if (!confirm(t('groupDetail.confirmCancelVote', { name: userName }))) return;
+    if (!await showConfirm(t('groupDetail.confirmCancelVote', { name: userName }), { danger: true, okText: t('groupDetail.cancelVote') })) return;
 
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.cancelling')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/votes/${userId}`, { method: 'DELETE' });
@@ -1708,16 +1789,16 @@ async function cancelMemberVote(pollId, userId, userName, btn) {
         await refreshPoll();
     } else {
         if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.cancelVote'); }
-        alert(result?.data?.detail || t('groupDetail.cancelVoteFailed'));
+        showToast(result?.data?.detail || t('groupDetail.cancelVoteFailed'));
     }
 }
 
 async function closePoll(pollId, voteCount, btn) {
     if (voteCount < 2) {
-        alert(t('groupDetail.needTwoParticipants'));
+        showToast(t('groupDetail.needTwoParticipants'), 'info');
         return;
     }
-    if (!confirm(t('groupDetail.confirmClosePoll', { count: voteCount }))) return;
+    if (!await showConfirm(t('groupDetail.confirmClosePoll', { count: voteCount }))) return;
 
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.processing')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/close`, { method: 'POST' });
@@ -1725,19 +1806,19 @@ async function closePoll(pollId, voteCount, btn) {
         await refreshPage();
     } else {
         if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.closePollShort'); }
-        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
+        showToast(result?.data?.detail || t('groupDetail.errorOccurred'));
     }
 }
 
 async function reopenPoll(pollId, btn) {
-    if (!confirm(t('groupDetail.confirmReopenPoll'))) return;
+    if (!await showConfirm(t('groupDetail.confirmReopenPoll'), { danger: true })) return;
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-sm"></span>${t('groupDetail.processing')}`; }
     const result = await apiFetch(`/api/polls/${pollId}/reopen`, { method: 'POST' });
     if (result?.ok) {
         await refreshPoll();
     } else {
         if (btn) { btn.disabled = false; btn.textContent = t('groupDetail.reopenPoll'); }
-        alert(result?.data?.detail || t('groupDetail.errorOccurred'));
+        showToast(result?.data?.detail || t('groupDetail.errorOccurred'));
     }
 }
 
@@ -1835,7 +1916,7 @@ function openPgnViewer(pgn, p1Name, p2Name) {
     try {
         const chess = new Chess();
         if (!chess.load_pgn(pgn)) {
-            alert(t('groupDetail.pgnLoadFailed'));
+            showToast(t('groupDetail.pgnLoadFailed'));
             return;
         }
         const history = chess.history();
@@ -1848,7 +1929,7 @@ function openPgnViewer(pgn, p1Name, p2Name) {
             pgnPositions.push(temp.fen());
         });
     } catch {
-        alert(t('groupDetail.pgnLoadFailed'));
+        showToast(t('groupDetail.pgnLoadFailed'));
         return;
     }
 
