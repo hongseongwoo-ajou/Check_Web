@@ -12,7 +12,6 @@
     "loading": "불러오는 중...",
     "logout": "로그아웃",
     "myInfo": "내 정보",
-    "practiceBoard": "♟ 체스판",
     "backToLobby": "← 로비로 돌아가기",
     "backHome": "← 홈으로",
     "draw": "무승부",
@@ -322,23 +321,5 @@
     "whiteShort": "백",
     "winParen": "{{name}} 승 ({{color}})",
     "winnerAnnounce": "{{name}} 승"
-  },
-  "practice": {
-    "resetButton": "↷ 초기화",
-    "resetConfirm": "판을 초기화하시겠습니까?",
-    "undoButton": "← 무르기",
-    "flipButton": "⇥ 판 돌리기",
-    "whiteTurn": "백의 차례",
-    "blackTurn": "흑의 차례",
-    "moveHistoryHeading": "수순",
-    "noMoves": "아직 수가 없습니다.",
-    "white": "백",
-    "black": "흑",
-    "win": "승리!",
-    "checkmate": "체크메이트",
-    "stalemate": "스테일메이트",
-    "insufficientMaterial": "기물 부족",
-    "fiftyMoveRule": "50수 규칙 또는 3회 반복",
-    "check": "체크!"
   }
 }

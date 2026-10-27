@@ -12,7 +12,6 @@
     "loading": "Loading...",
     "logout": "Log out",
     "myInfo": "My Info",
-    "practiceBoard": "♟ Practice Board",
     "backToLobby": "← Back to Lobby",
     "backHome": "← Home",
     "draw": "Draw",
@@ -322,23 +321,5 @@
     "whiteShort": "W",
     "winParen": "{{name}} wins ({{color}})",
     "winnerAnnounce": "{{name}} wins"
-  },
-  "practice": {
-    "resetButton": "↷ Reset",
-    "resetConfirm": "Reset the board?",
-    "undoButton": "← Undo",
-    "flipButton": "⇥ Flip Board",
-    "whiteTurn": "White to move",
-    "blackTurn": "Black to move",
-    "moveHistoryHeading": "Moves",
-    "noMoves": "No moves yet.",
-    "white": "White",
-    "black": "Black",
-    "win": "wins!",
-    "checkmate": "Checkmate",
-    "stalemate": "Stalemate",
-    "insufficientMaterial": "Insufficient material",
-    "fiftyMoveRule": "50-move rule or repetition",
-    "check": "Check!"
   }
 }
