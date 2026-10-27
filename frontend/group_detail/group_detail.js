@@ -98,9 +98,10 @@ function playerLink(id, nickname, rating) {
 function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
-        const d = new Date(dateStr.replace(' ', 'T') + (dateStr.includes('T') ? '' : 'Z'));
+        // 서버는 KST 기준 시간을 타임존 표기 없이 저장하므로 +09:00으로 해석하고, 표시도 KST로 고정
+        const d = new Date(dateStr.replace(' ', 'T') + '+09:00');
         const locale = (typeof i18next !== 'undefined' && i18next.resolvedLanguage === 'en') ? 'en-US' : 'ko-KR';
-        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+        return d.toLocaleDateString(locale, { timeZone: 'Asia/Seoul', month: 'short', day: 'numeric' });
     } catch {
         return dateStr.slice(0, 10);
     }
