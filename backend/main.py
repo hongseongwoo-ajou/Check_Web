@@ -584,7 +584,7 @@ def fetch_chess_rating_trend(chess_username: str, max_months: int = CHESS_TREND_
 
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=20)
-    nickname: str = Field(min_length=1, max_length=20)
+    nickname: str = Field(min_length=1, max_length=10)
     password: str = Field(min_length=4, max_length=128)
 
 
@@ -658,7 +658,7 @@ class AssignFolderRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    nickname: str = Field(min_length=1, max_length=20)
+    nickname: str = Field(min_length=1, max_length=10)
 
 
 class UpdatePasswordRequest(BaseModel):

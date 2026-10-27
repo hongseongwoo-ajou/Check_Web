@@ -3,6 +3,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1rem;
     padding: 1rem 2rem;
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
@@ -13,17 +14,27 @@
     font-weight: 700;
     color: var(--color-primary);
     letter-spacing: 0.03em;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .header-user {
     display: flex;
     align-items: center;
     gap: 1rem;
+    min-width: 0;
 }
+
+/* 인사말만 줄어들고(말줄임), 버튼들은 찌그러지지 않게 */
+.header-user > :not(.welcome-msg) { flex-shrink: 0; }
 
 .welcome-msg {
     color: var(--color-text-muted);
     font-size: 0.9rem;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .welcome-msg strong {
@@ -38,6 +49,7 @@
     border-radius: var(--radius);
     font-size: 0.85rem;
     text-decoration: none;
+    white-space: nowrap;
     transition: background 0.2s, color 0.2s;
 }
 
@@ -54,6 +66,7 @@
     color: var(--color-text-muted);
     border-radius: var(--radius);
     font-size: 0.85rem;
+    white-space: nowrap;
     transition: color 0.2s, border-color 0.2s;
 }
 
@@ -319,6 +332,11 @@
 }
 
 /* ===== 반응형 ===== */
+/* 헤더가 좁으면 인사말이 "안녕하…"처럼 잘려 의미가 없으므로 숨김 */
+@media (max-width: 720px) {
+    .welcome-msg { display: none; }
+}
+
 @media (max-width: 640px) {
     .lobby-main {
         margin: 1.25rem auto;
