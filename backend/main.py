@@ -7,8 +7,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from services.matchmaker import make_pairs
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, StringConstraints
+from typing import Optional, Annotated
 from datetime import datetime, timezone, timedelta
 import sqlite3
 import hashlib
@@ -69,7 +69,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
     err_type = first.get("type", "")
     ctx = first.get("ctx", {})
-    if err_type == "string_too_short":
+    if err_type == "string_too_short" and ctx.get("min_length") == 1:
+        detail = f"{label}{eul_reul} 입력해주세요."
+    elif err_type == "string_too_short":
         detail = f"{label}{eun_neun} {ctx.get('min_length')}자 이상이어야 합니다."
     elif err_type == "string_too_long":
         detail = f"{label}{eun_neun} {ctx.get('max_length')}자 이하여야 합니다."
@@ -582,9 +584,13 @@ def fetch_chess_rating_trend(chess_username: str, max_months: int = CHESS_TREND_
 
 # ---------- 스키마 ----------
 
+# 앞뒤 공백을 먼저 제거한 뒤 길이 검사 (공백만 입력 → "입력해주세요", 공백은 10자에 포함 안 됨)
+Nickname = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10)]
+
+
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=20)
-    nickname: str = Field(min_length=1, max_length=10)
+    nickname: Nickname
     password: str = Field(min_length=4, max_length=128)
 
 
@@ -658,7 +664,7 @@ class AssignFolderRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    nickname: str = Field(min_length=1, max_length=10)
+    nickname: Nickname
 
 
 class UpdatePasswordRequest(BaseModel):
