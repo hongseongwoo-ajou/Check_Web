@@ -58,7 +58,8 @@ function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {
         const d = new Date(dateStr.replace(' ', 'T') + '+09:00');
-        return d.toLocaleString('ko-KR', {
+        const locale = (typeof i18next !== 'undefined' && i18next.resolvedLanguage === 'en') ? 'en-US' : 'ko-KR';
+        return d.toLocaleString(locale, {
             timeZone: 'Asia/Seoul',
             month: 'short',
             day: 'numeric',
@@ -77,6 +78,7 @@ let currentUser = null;
 async function loadUser() {
     const result = await apiFetch('/api/me');
     if (!result || !result.ok) return;
+    await window.i18nReady;
 
     currentUser = result.data;
 
@@ -109,8 +111,9 @@ let ratingChartInstance = null;
 
 async function loadStats() {
     const result = await apiFetch('/api/me/stats');
+    await window.i18nReady;
     if (!result || !result.ok) {
-        const failMsg = '<p class="stats-empty">불러오지 못했습니다.</p>';
+        const failMsg = `<p class="stats-empty">${t('profile.loadFailed')}</p>`;
         document.getElementById('stats-summary-grid').innerHTML = failMsg;
         document.getElementById('recent-form-row').innerHTML = failMsg;
         document.getElementById('rivals-list').innerHTML = failMsg;
@@ -127,29 +130,29 @@ function renderStatsSummary(s) {
     const el = document.getElementById('stats-summary-grid');
 
     if (!s.played) {
-        el.innerHTML = '<p class="stats-empty">아직 기록된 경기가 없습니다.</p>';
+        el.innerHTML = `<p class="stats-empty">${t('profile.noMatchesYet')}</p>`;
         return;
     }
 
     el.innerHTML = `
         <div class="stat-box">
-            <span class="stat-box-label">총 경기</span>
+            <span class="stat-box-label">${t('profile.totalPlayed')}</span>
             <span class="stat-box-value">${s.played}</span>
         </div>
         <div class="stat-box wins">
-            <span class="stat-box-label">승</span>
+            <span class="stat-box-label">${t('profile.wins')}</span>
             <span class="stat-box-value">${s.wins}</span>
         </div>
         <div class="stat-box draws">
-            <span class="stat-box-label">무</span>
+            <span class="stat-box-label">${t('profile.draws')}</span>
             <span class="stat-box-value">${s.draws}</span>
         </div>
         <div class="stat-box losses">
-            <span class="stat-box-label">패</span>
+            <span class="stat-box-label">${t('profile.losses')}</span>
             <span class="stat-box-value">${s.losses}</span>
         </div>
         <div class="stat-box win-rate">
-            <span class="stat-box-label">승률</span>
+            <span class="stat-box-label">${t('profile.winRate')}</span>
             <span class="stat-box-value">${s.win_rate}%</span>
         </div>`;
 }
@@ -260,11 +263,11 @@ function renderRecentForm(matches) {
     const el = document.getElementById('recent-form-row');
 
     if (!matches.length) {
-        el.innerHTML = '<p class="stats-empty">아직 기록된 경기가 없습니다.</p>';
+        el.innerHTML = `<p class="stats-empty">${t('profile.noMatchesYet')}</p>`;
         return;
     }
 
-    const labelMap = { win: '승', draw: '무', loss: '패' };
+    const labelMap = { win: t('profile.winShort'), draw: t('profile.drawShort'), loss: t('profile.lossShort') };
     el.innerHTML = matches.map(m => {
         const title = `${formatDate(m.played_at)} · vs ${m.opponent_nickname} · ${m.is_official ? t('common.official') : t('common.friendly')}`;
         return `<span class="form-badge ${m.result}" title="${escapeHtml(title)}">${labelMap[m.result]}</span>`;
@@ -275,7 +278,7 @@ function renderRivals(rivals) {
     const el = document.getElementById('rivals-list');
 
     if (!rivals.length) {
-        el.innerHTML = '<p class="stats-empty">아직 함께 대결한 상대가 없습니다.</p>';
+        el.innerHTML = `<p class="stats-empty">${t('profile.noRivalsYet')}</p>`;
         return;
     }
 
@@ -283,9 +286,9 @@ function renderRivals(rivals) {
         <div class="rival-row">
             <span class="rival-rank">${i + 1}</span>
             <span class="rival-name">${escapeHtml(r.nickname)}</span>
-            <span class="rival-played">총 ${r.played}전</span>
+            <span class="rival-played">${t('profile.rivalPlayed', { count: r.played })}</span>
             <span class="rival-record">
-                <span class="r-win">${r.wins}승</span> <span class="r-draw">${r.draws}무</span> <span class="r-loss">${r.losses}패</span>
+                <span class="r-win">${t('profile.winCount', { count: r.wins })}</span> <span class="r-draw">${t('profile.drawCount', { count: r.draws })}</span> <span class="r-loss">${t('profile.lossCount', { count: r.losses })}</span>
             </span>
         </div>`).join('');
 }

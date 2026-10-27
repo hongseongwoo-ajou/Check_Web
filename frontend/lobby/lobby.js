@@ -36,7 +36,7 @@ async function apiFetch(path, options = {}) {
         const data = await res.json();
         return { ok: res.ok, status: res.status, data };
     } catch {
-        return { ok: false, status: 0, data: { detail: '서버에 연결할 수 없습니다.' } };
+        return { ok: false, status: 0, data: { detail: t('auth.serverUnreachable') } };
     }
 }
 
@@ -51,8 +51,7 @@ function escapeHtml(str) {
 // ===== 초기화 =====
 
 async function init() {
-    await loadCurrentUser();
-    await loadGroups();
+    await Promise.all([loadCurrentUser(), loadGroups()]);
 }
 
 // ===== 유저 정보 =====
@@ -68,6 +67,7 @@ async function loadCurrentUser() {
 async function loadGroups() {
     const result = await apiFetch('/api/groups');
     if (!result) return;
+    await window.i18nReady;
 
     const list     = document.getElementById('groups-list');
     const emptyMsg = document.getElementById('groups-empty');

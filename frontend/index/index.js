@@ -10,10 +10,12 @@ async function checkServerStatus() {
     try {
         const res = await fetch(`${API_BASE}/health`);
         const data = await res.json();
-        el.textContent = `${window.t ? window.t('index.serverOk') : '정상 작동 중'} — ${data.message}`;
+        await window.i18nReady;
+        el.textContent = `${t('index.serverOk')} — ${data.message}`;
         el.className = 'ok';
     } catch {
-        el.textContent = window.t ? window.t('index.serverFail') : '서버에 연결할 수 없습니다.';
+        await window.i18nReady;
+        el.textContent = t('index.serverFail');
         el.className = 'fail';
     }
 }

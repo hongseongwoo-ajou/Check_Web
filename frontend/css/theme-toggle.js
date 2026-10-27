@@ -11,7 +11,8 @@ function _setToggleButtonIcons(theme) {
     document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
         const isLight = theme === 'light';
         btn.textContent = THEME_ICON[theme];
-        btn.title = isLight ? '다크 모드로 전환' : '라이트 모드로 전환';
+        btn.title = window.t ? window.t(isLight ? 'common.switchToDark' : 'common.switchToLight')
+                             : (isLight ? '다크 모드로 전환' : '라이트 모드로 전환');
         btn.setAttribute('aria-label', btn.title);
     });
 }
@@ -48,3 +49,7 @@ document.querySelectorAll('.theme-toggle-btn').forEach((btn) => {
 
 // theme-init.js가 이미 심어둔 테마에 맞춰 버튼 아이콘 초기 상태를 동기화 (애니메이션 없이)
 applyTheme(getCurrentTheme());
+// 번역 로드·언어 변경 후 툴팁 문구 갱신
+if (typeof i18next !== 'undefined') {
+    i18next.on('languageChanged', () => _setToggleButtonIcons(getCurrentTheme()));
+}

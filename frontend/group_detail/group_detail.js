@@ -113,6 +113,12 @@ function resultLabel(isDraw, winnerHtml) {
 
 const isAdmin = () => currentRole === '방장' || currentRole === '임원';
 
+function roleBadge(role) {
+    if (role === '방장') return `<span class="role-badge admin">${t('groupDetail.roleOwner')}</span>`;
+    if (role === '임원') return `<span class="role-badge officer">${t('groupDetail.roleOfficer')}</span>`;
+    return '';
+}
+
 function matchTypeBadge(isOfficial) {
     return isOfficial
         ? `<span class="official-badge official">${t('common.official')}</span>`
@@ -147,9 +153,7 @@ function renderMembers(members) {
         const hasRating = m.rating_rapid != null;
         const isSelf    = m.id === currentUserId;
 
-        const roleBadge = m.role === '방장' ? '<span class="role-badge admin">방장</span>'
-                        : m.role === '임원' ? '<span class="role-badge officer">임원</span>'
-                        : '';
+        const badge = roleBadge(m.role);
 
         // 방장만: 역할 변경 버튼
         let roleBtn = '';
@@ -173,7 +177,7 @@ function renderMembers(members) {
         const li = document.createElement('li');
         li.className = `member-item${isSelf ? ' me' : ''}${!hasRating ? ' unlinked' : ''}`;
         li.innerHTML = `
-            <span class="member-name">${playerLink(m.id, m.nickname)}${roleBadge}</span>
+            <span class="member-name">${playerLink(m.id, m.nickname)}${badge}</span>
             <span class="member-rating">${hasRating ? `(${m.rating_rapid})` : `(${t('groupDetail.notLinked')})`}</span>
             ${roleBtn}${kickBtn}
         `;
@@ -580,7 +584,7 @@ async function openUserProfileModal(memberId) {
     const requestId = ++profileRequestId;
     document.getElementById('modal-user-profile').classList.remove('hidden');
     document.getElementById('profile-modal-content').innerHTML =
-        '<p class="loading-msg" style="text-align:center">불러오는 중...</p>';
+        `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}/profile`);
 
@@ -636,8 +640,7 @@ function renderProfileMatchRow(m, memberId) {
 }
 
 function renderUserProfileModal(p) {
-    const roleBadge = p.role === '방장' ? '<span class="role-badge admin">방장</span>'
-                     : p.role === '임원' ? '<span class="role-badge officer">임원</span>' : '';
+    const badge = roleBadge(p.role);
     const ratingStr = p.rating_rapid != null ? p.rating_rapid : t('groupDetail.notLinked');
     const { played, wins, draws, losses, points } = p.record;
 
@@ -647,7 +650,7 @@ function renderUserProfileModal(p) {
 
     document.getElementById('profile-modal-content').innerHTML = `
         <div class="profile-header">
-            <h3 class="profile-name">${escapeHtml(p.nickname)}${roleBadge}</h3>
+            <h3 class="profile-name">${escapeHtml(p.nickname)}${badge}</h3>
             <p class="profile-chess-id">${p.chess_username ? `Chess.com: ${escapeHtml(p.chess_username)}` : t('groupDetail.chessNotLinked')}</p>
         </div>
         <div class="profile-stats-grid">
@@ -2080,6 +2083,7 @@ async function refreshPage() {
         apiFetch(`/api/groups/${groupId}/announcements/latest`),
         apiFetch(`/api/groups/${groupId}/matches`),
     ]);
+    await window.i18nReady;
 
     if (!membersRes?.ok) {
         if (membersRes?.status === 403 || membersRes?.status === 404) {
