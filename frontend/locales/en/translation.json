@@ -197,6 +197,7 @@
       "pollClose": "Poll Closed",
       "pollReopen": "Poll Reopened",
       "pollDelete": "Poll Deleted",
+      "voteCancel": "Vote Canceled",
       "matchRecord": "Match Result Recorded",
       "matchResultEdit": "Match Result Edited",
       "matchEdit": "Match Edited",
@@ -324,6 +325,7 @@
   },
   "practice": {
     "resetButton": "↷ Reset",
+    "resetConfirm": "Reset the board?",
     "undoButton": "← Undo",
     "flipButton": "⇥ Flip Board",
     "whiteTurn": "White to move",

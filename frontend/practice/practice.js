@@ -140,7 +140,7 @@ function renderHistory() {
 
 document.getElementById('btn-reset').addEventListener('click', function () {
     if (!game.history().length) return;
-    if (!confirm('판을 초기화하시겠습니까?')) return;
+    if (!confirm(t('practice.resetConfirm'))) return;
     game.reset();
     board.position('start');
     updateStatus();

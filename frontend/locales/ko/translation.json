@@ -197,6 +197,7 @@
       "pollClose": "투표 종료",
       "pollReopen": "투표 재개",
       "pollDelete": "투표 삭제",
+      "voteCancel": "참가 투표 취소",
       "matchRecord": "경기 결과 기록",
       "matchResultEdit": "경기 결과 수정",
       "matchEdit": "경기 수정",
@@ -324,6 +325,7 @@
   },
   "practice": {
     "resetButton": "↷ 초기화",
+    "resetConfirm": "판을 초기화하시겠습니까?",
     "undoButton": "← 무르기",
     "flipButton": "⇥ 판 돌리기",
     "whiteTurn": "백의 차례",

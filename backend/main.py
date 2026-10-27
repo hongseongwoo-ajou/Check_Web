@@ -89,10 +89,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": detail})
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -2344,8 +2340,10 @@ async def delete_match(match_id: int, user=Depends(get_current_user)):
 # ---------- 활동 로그 ----------
 
 VALID_LOG_ACTIONS = {
-    "투표_종료", "투표_재개", "투표_삭제",
+    "투표_종료", "투표_재개", "투표_삭제", "투표_취소",
     "경기_결과기록", "경기_결과수정", "경기_수정", "경기_추가", "경기_삭제",
+    "친선경기_기록", "친선경기_폴더담기", "친선경기_폴더빼기",
+    "폴더_생성", "폴더_수정", "폴더_삭제",
     "멤버_강퇴", "역할_변경",
 }
 
