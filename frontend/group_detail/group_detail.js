@@ -120,6 +120,71 @@ function roleBadge(role) {
     return '';
 }
 
+// ===== 경기 줄 '⋯' 메뉴 =====
+// 기보·수정·삭제 버튼을 메뉴 하나로 묶어 경기 줄에서 글씨와 겹치지 않게 한다.
+// 버튼 클래스(btn-pgn-edit 등)는 그대로라 각 목록의 querySelectorAll 이벤트 연결이 그대로 동작한다.
+
+function menuItem(cls, matchId, label) {
+    return `<button type="button" class="match-menu-item ${cls}" role="menuitem" data-match-id="${matchId}">${label}</button>`;
+}
+
+function pgnMenuItems(m) {
+    return [
+        menuItem('btn-pgn-edit', m.id, m.pgn_data ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')),
+        m.pgn_data ? menuItem('btn-pgn-view', m.id, t('groupDetail.pgnViewLabel')) : '',
+    ];
+}
+
+function matchMenu(items) {
+    const html = items.filter(Boolean).join('');
+    if (!html) return '';
+    const label = t('groupDetail.moreActions');
+    return `
+        <div class="match-menu">
+            <button type="button" class="btn-match-menu" aria-haspopup="menu" aria-expanded="false" title="${label}" aria-label="${label}">⋯</button>
+            <div class="match-menu-list hidden" role="menu">${html}</div>
+        </div>`;
+}
+
+function closeMatchMenus() {
+    document.querySelectorAll('.match-menu-list:not(.hidden)').forEach(list => {
+        list.classList.add('hidden');
+        list.previousElementSibling?.setAttribute('aria-expanded', 'false');
+    });
+}
+
+// 메뉴는 모달·아코디언의 overflow에 잘리지 않도록 화면 기준(fixed)으로 띄운다
+function positionMatchMenu(toggle, list) {
+    const r = toggle.getBoundingClientRect();
+    list.style.top  = '0px';
+    list.style.left = '0px';
+    const w = list.offsetWidth;
+    const h = list.offsetHeight;
+    const top = (r.bottom + 4 + h > window.innerHeight) ? r.top - 4 - h : r.bottom + 4;
+    list.style.top  = `${Math.max(4, top)}px`;
+    list.style.left = `${Math.max(4, Math.min(r.right - w, window.innerWidth - w - 4))}px`;
+}
+
+// 캡처 단계에서 처리: 메뉴 항목 버튼의 기존 리스너는 그대로 실행되고, 메뉴는 항상 닫힌다
+document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('.btn-match-menu');
+    if (!toggle) {
+        closeMatchMenus();
+        return;
+    }
+    const list    = toggle.nextElementSibling;
+    const wasOpen = !list.classList.contains('hidden');
+    closeMatchMenus();
+    if (!wasOpen) {
+        list.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+        positionMatchMenu(toggle, list);
+    }
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMatchMenus(); });
+document.addEventListener('scroll', closeMatchMenus, true);
+window.addEventListener('resize', closeMatchMenus);
+
 function matchTypeBadge(isOfficial) {
     return isOfficial
         ? `<span class="official-badge official">${t('common.official')}</span>`
@@ -862,7 +927,6 @@ function buildPlayingCard(poll, matches, votes = []) {
             const isDraw  = !m.winner_id;
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
-            const hasPgn  = !!m.pgn_data;
             return `
                 <div class="match-card finished">
                     <div class="match-vs">
@@ -873,12 +937,11 @@ function buildPlayingCard(poll, matches, votes = []) {
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
                         ${resultLabel(isDraw)}
                     </span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>
-                    <button class="btn-delete-match" data-match-id="${m.id}">${t('groupDetail.deleteMatch')}</button>` : ''}
-                    <div class="match-pgn-actions">
-                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
-                    </div>
+                    ${matchMenu([
+                        ...pgnMenuItems(m),
+                        isAdmin() ? menuItem('btn-edit-match', m.id, t('groupDetail.editMatch')) : '',
+                        isAdmin() ? menuItem('btn-delete-match', m.id, t('groupDetail.deleteMatch')) : '',
+                    ])}
                 </div>`;
         }
         const isParticipant = currentUserId === m.player1_id || currentUserId === m.player2_id;
@@ -895,7 +958,7 @@ function buildPlayingCard(poll, matches, votes = []) {
                         data-p1-id="${m.player1_id}" data-p1-name="${escapeHtml(m.player1_nickname)}"
                         data-p2-id="${m.player2_id}" data-p2-name="${escapeHtml(m.player2_nickname)}">${t('groupDetail.finishMatch')}</button>
                 ` : ''}
-                ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>` : ''}
+                ${matchMenu([isAdmin() ? menuItem('btn-edit-match', m.id, t('groupDetail.editMatch')) : ''])}
             </div>`;
     }).join('');
 
@@ -1059,8 +1122,6 @@ function renderPollMatches(pollId) {
             const isDraw  = !m.winner_id;
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
-            const hasPgn  = !!m.pgn_data;
-
             return `
                 <div class="accordion-match-item">
                     <span class="match-players">
@@ -1069,12 +1130,11 @@ function renderPollMatches(pollId) {
                         <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </span>
                     <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
-                    ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('common.edit')}</button>
-                    <button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
-                    <span class="match-pgn-actions">
-                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
-                    </span>
+                    ${matchMenu([
+                        ...pgnMenuItems(m),
+                        isAdmin() ? menuItem('btn-edit-match', m.id, t('groupDetail.editMatch')) : '',
+                        isAdmin() ? menuItem('btn-delete-match', m.id, t('groupDetail.deleteMatch')) : '',
+                    ])}
                 </div>`;
         }).join('');
     }
@@ -1142,7 +1202,6 @@ function renderRecentMatches(matches) {
         const p1Win    = m.winner_id === m.player1_id;
         const p2Win    = m.winner_id === m.player2_id;
         const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
-        const hasPgn   = !!m.pgn_data;
         return `
             <div class="recent-match-item">
                 <div class="recent-match-row">
@@ -1153,12 +1212,11 @@ function renderRecentMatches(matches) {
                         <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </span>
                     <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
-                    <span class="match-pgn-actions">
-                        <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
-                        ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
-                        ${isAdmin() ? `<button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
-                    </span>
                     <span class="recent-match-date">${formatDate(m.played_at)}</span>
+                    ${matchMenu([
+                        ...pgnMenuItems(m),
+                        isAdmin() ? menuItem('btn-delete-match', m.id, t('groupDetail.deleteMatch')) : '',
+                    ])}
                 </div>
                 ${noteHtml}
             </div>`;
@@ -1439,7 +1497,7 @@ function renderFolderMatches(folderId) {
                 </span>
                 <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
                 <span class="recent-match-date">${formatDate(m.played_at)}</span>
-                ${isAdmin() ? `<button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
+                ${matchMenu([isAdmin() ? menuItem('btn-delete-match', m.id, t('groupDetail.deleteMatch')) : ''])}
                 ${noteHtml}
             </div>`;
     }).join('');

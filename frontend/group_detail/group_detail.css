@@ -435,7 +435,8 @@
 
 .recent-match-row {
     display: grid;
-    grid-template-columns: 3.4rem 1fr 4.6rem 10rem 3.4rem;
+    /* 배지 | 선수 | 결과(무승부일 때만) | 날짜 | ⋯ 메뉴 */
+    grid-template-columns: 3.4rem 1fr auto auto auto;
     align-items: center;
     gap: 0.6rem;
 }
@@ -449,10 +450,6 @@
 
 .recent-match-row .match-result {
     text-align: right;
-}
-
-.recent-match-row .match-pgn-actions {
-    justify-content: flex-end;
 }
 
 .recent-match-date {
@@ -1125,7 +1122,8 @@
 
 .accordion-match-item {
     display: grid;
-    grid-template-columns: 1fr 4.6rem auto auto;
+    /* 선수 | 결과(무승부일 때만) | ⋯ 메뉴 */
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0;
@@ -1142,10 +1140,75 @@
 }
 
 .accordion-match-item .match-result { text-align: right; }
-.accordion-match-item .match-pgn-actions { justify-content: flex-end; }
 
 .accordion-match-item.folder-match-item {
-    grid-template-columns: 1fr 4.6rem auto;
+    /* 선수 | 결과 | 날짜 | ⋯ 메뉴, 메모는 아래 줄 전체 */
+    grid-template-columns: 1fr auto auto auto;
+}
+
+.folder-match-item .recent-match-note { grid-column: 1 / -1; }
+
+/* ===== 경기 줄 '⋯' 메뉴 ===== */
+.match-menu { flex-shrink: 0; }
+
+.btn-match-menu {
+    width: 1.9rem;
+    height: 1.7rem;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-match-menu:hover,
+.btn-match-menu[aria-expanded="true"] {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.match-menu-list {
+    position: fixed;          /* 모달·아코디언 overflow에 잘리지 않도록 화면 기준 배치 (위치는 JS에서 계산) */
+    z-index: 200;             /* 모달(100) 위 */
+    min-width: 8rem;
+    padding: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.match-menu-list.hidden { display: none; }
+
+.match-menu-list .match-menu-item {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.match-menu-list .match-menu-item:hover {
+    background: rgba(var(--overlay-rgb), 0.08);
+    border-color: transparent;
+    color: var(--color-text);
+}
+
+.match-menu-list .match-menu-item.btn-delete-match,
+.match-menu-list .match-menu-item.btn-delete-match:hover {
+    color: var(--color-danger);
 }
 
 .match-vs-sm {
@@ -1968,12 +2031,6 @@
 }
 
 /* ===== 기보 버튼 ===== */
-.match-pgn-actions {
-    display: flex;
-    gap: 0.35rem;
-    flex-shrink: 0;
-}
-
 .btn-pgn-edit,
 .btn-pgn-view {
     padding: 0.28rem 0.6rem;
@@ -2264,16 +2321,14 @@
         gap: 0.5rem;
     }
 
-    .match-pgn-actions {
-        flex-wrap: wrap;
-    }
+    .match-card .match-menu { align-self: flex-end; }
 
     /* 최근 경기 내역: 좁은 화면에서는 2줄로 배치 */
     .recent-match-row {
         grid-template-columns: auto 1fr auto;
         grid-template-areas:
-            "badge players date"
-            "result result actions";
+            "badge players menu"
+            "result result date";
         row-gap: 0.4rem;
     }
 
@@ -2281,29 +2336,10 @@
     .recent-match-row .match-players   { grid-area: players; white-space: normal; }
     .recent-match-row .recent-match-date { grid-area: date; }
     .recent-match-row .match-result    { grid-area: result; text-align: left; }
-    .recent-match-row .match-pgn-actions {
-        grid-area: actions;
-        flex-wrap: wrap;
-    }
+    .recent-match-row .match-menu      { grid-area: menu; }
 
-    /* 지난 경기 결과 아코디언: 좁은 화면에서는 선수 정보를 한 줄 통째로, 나머지는 아래 줄에 배치 */
-    .accordion-match-item {
-        grid-template-columns: auto auto auto;
-        column-gap: 0.5rem;
-        row-gap: 0.4rem;
-    }
-
-    .accordion-match-item .match-players {
-        grid-column: 1 / -1;
-        white-space: normal;
-    }
-
-    .accordion-match-item .match-result { text-align: left; }
-
-    .accordion-match-item .match-pgn-actions {
-        flex-wrap: wrap;
-        justify-content: flex-start;
-    }
+    /* 지난 경기 결과·폴더: 좁은 화면에서는 선수 이름 줄바꿈 허용 */
+    .accordion-match-item .match-players { white-space: normal; }
 
     .btn-record-result {
         width: 100%;
