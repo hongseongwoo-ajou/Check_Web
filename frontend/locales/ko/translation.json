@@ -171,6 +171,7 @@
     "drawShort": "무",
     "lossShort": "패",
     "moreActions": "더보기",
+    "toggleMembers": "멤버 목록 펼치기/접기",
     "roleOwner": "방장",
     "roleOfficer": "임원",
     "pointsHeader": "승점",

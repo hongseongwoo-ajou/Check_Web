@@ -100,8 +100,12 @@
 
             <!-- ===== 사이드바: 멤버 목록 ===== -->
             <aside class="detail-sidebar">
-                <section class="detail-card">
-                    <h2 class="card-heading"><span data-i18n="groupDetail.membersHeading">멤버</span> <span id="member-count" class="count-badge"></span></h2>
+                <section class="detail-card members-card" id="members-card">
+                    <h2 class="card-heading"><span data-i18n="groupDetail.membersHeading">멤버</span> <span id="member-count" class="count-badge"></span>
+                        <!-- 좁은 화면에서만 보이는 접기/펼치기 버튼 -->
+                        <button type="button" id="btn-toggle-members" class="members-toggle" aria-expanded="false" aria-controls="member-list"
+                                title="멤버 목록 펼치기/접기" aria-label="멤버 목록 펼치기/접기" data-i18n-title="groupDetail.toggleMembers"><span class="members-chevron" aria-hidden="true">▾</span></button>
+                    </h2>
                     <ol id="member-list" class="member-list">
                         <li class="loading-msg" data-i18n="common.loading">불러오는 중...</li>
                     </ol>

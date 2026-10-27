@@ -171,6 +171,7 @@
     "drawShort": "D",
     "lossShort": "L",
     "moreActions": "More actions",
+    "toggleMembers": "Show/hide members",
     "roleOwner": "Owner",
     "roleOfficer": "Officer",
     "pointsHeader": "Pts",

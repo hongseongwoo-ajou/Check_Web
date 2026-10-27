@@ -353,6 +353,26 @@ function renderMembers(members) {
     });
 }
 
+// 좁은 화면에서 멤버 목록 접기/펼치기 (기본 접힘, 선택은 기기에 기억). 넓은 화면에서는 버튼이 숨겨져 동작하지 않음
+(function initMembersToggle() {
+    const card = document.getElementById('members-card');
+    const btn  = document.getElementById('btn-toggle-members');
+    let expanded = false;
+    try { expanded = localStorage.getItem('membersExpanded') === '1'; } catch { /* 저장소 사용 불가 */ }
+    const apply = () => {
+        card.classList.toggle('collapsed', !expanded);
+        btn.setAttribute('aria-expanded', String(expanded));
+    };
+    apply();
+    card.querySelector('.card-heading').addEventListener('click', (e) => {
+        if (getComputedStyle(btn).display === 'none') return;
+        if (e.target.closest('.player-link')) return;
+        expanded = !expanded;
+        apply();
+        try { localStorage.setItem('membersExpanded', expanded ? '1' : '0'); } catch { /* 무시 */ }
+    });
+})();
+
 async function changeMemberRole(memberId, newRole) {
     const member      = currentMembers.find(m => m.id === memberId);
     const displayName = member?.nickname ?? t('groupDetail.thatMember');

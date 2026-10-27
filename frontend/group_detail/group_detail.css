@@ -75,6 +75,8 @@
     top: 1.5rem;
 }
 
+.members-toggle { display: none; }   /* 넓은 화면에서는 항상 펼쳐 둠 */
+
 /* ===== 그룹 타이틀 ===== */
 .group-title-row {
     display: flex;
@@ -2280,13 +2282,41 @@
     }
 
     .detail-layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);   /* 긴 내용이 있어도 열이 화면보다 넓어지지 않게 */
         gap: 1rem;
     }
 
     .detail-sidebar {
         position: static;
     }
+
+    /* 멤버 목록을 맨 아래가 아니라 그룹 이름 바로 아래에 두기:
+       본문 래퍼를 풀어 자식들을 그리드 항목으로 만들고 순서를 지정 */
+    .detail-content { display: contents; }
+    .detail-content > * { order: 2; min-width: 0; }
+    .detail-content > .group-title-row { order: 0; }
+    .detail-sidebar { order: 1; }
+
+    /* 멤버 목록 접기/펼치기 (기본 접힘) */
+    .members-card .card-heading { cursor: pointer; }
+    .members-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        width: 1.9rem;
+        height: 1.7rem;
+        padding: 0;
+        background: transparent;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        color: var(--color-text-muted);
+        font-size: 0.9rem;
+    }
+    .members-chevron { display: inline-block; transition: transform 0.2s; }
+    .members-card.collapsed .members-chevron { transform: rotate(-90deg); }
+    .members-card.collapsed .card-heading { padding-bottom: 0; border-bottom: none; margin-bottom: 0; }
+    .members-card.collapsed .member-list { display: none; }
 
     .detail-header {
         padding: 0.75rem 1rem;
