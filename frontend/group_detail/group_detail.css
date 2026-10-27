@@ -1219,9 +1219,13 @@
 }
 
 .match-menu-list .match-menu-item.btn-delete-match,
-.match-menu-list .match-menu-item.btn-delete-match:hover {
+.match-menu-list .match-menu-item.btn-delete-match:hover,
+.match-menu-list .match-menu-item.btn-kick,
+.match-menu-list .match-menu-item.btn-kick:hover {
     color: var(--color-danger);
 }
+
+.member-item .match-menu { margin-left: auto; }
 
 .match-vs-sm {
     color: var(--color-text-muted);
@@ -1322,51 +1326,6 @@
     background: rgba(var(--color-info-rgb), 0.1);
     color: var(--color-info);
 }
-
-/* ===== 임명/해임 버튼 ===== */
-.btn-role {
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 0.15rem 0.45rem;
-    border-radius: 3px;
-    border: none;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: opacity 0.15s;
-    line-height: 1.5;
-}
-
-.btn-role:hover { opacity: 0.8; }
-
-.btn-promote {
-    background: rgba(var(--color-success-rgb), 0.15);
-    color: var(--color-success);
-}
-
-.btn-demote {
-    background: rgba(220, 130, 80, 0.15);
-    color: #e09060;
-}
-
-:root[data-theme="light"] .btn-demote { color: #a0521f; }
-
-.btn-kick {
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 0.15rem 0.45rem;
-    border-radius: 3px;
-    border: none;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    line-height: 1.5;
-    background: rgba(var(--color-danger-rgb), 0.12);
-    color: var(--color-danger);
-    transition: opacity 0.15s;
-}
-
-.btn-kick:hover { opacity: 0.75; }
 
 /* ===== 그룹 설정 버튼 ===== */
 .btn-group-settings {

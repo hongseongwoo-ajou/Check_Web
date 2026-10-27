@@ -311,23 +311,21 @@ function renderMembers(members) {
 
         const badge = roleBadge(m.role);
 
-        // 방장만: 역할 변경 버튼
-        let roleBtn = '';
+        // 관리 동작은 경기 목록처럼 '⋯' 메뉴로 묶는다 (가능한 동작이 없으면 메뉴도 없음)
+        // 방장만: 역할 변경
+        let roleItem = '';
         if (isOwner && !isSelf && m.role !== '방장') {
-            if (m.role === '임원') {
-                roleBtn = `<button class="btn-role btn-demote" data-member-id="${m.id}" data-new-role="회원" title="${t('groupDetail.demoteOfficer')}">${t('groupDetail.demote')}</button>`;
-            } else {
-                roleBtn = `<button class="btn-role btn-promote" data-member-id="${m.id}" data-new-role="임원" title="${t('groupDetail.promoteOfficer')}">${t('groupDetail.promote')}</button>`;
-            }
+            const toOfficer = m.role !== '임원';
+            roleItem = `<button type="button" class="match-menu-item btn-role" role="menuitem" data-member-id="${m.id}" data-new-role="${toOfficer ? '임원' : '회원'}">${t(toOfficer ? 'groupDetail.promoteOfficer' : 'groupDetail.demoteOfficer')}</button>`;
         }
 
-        // 방장·임원: 강퇴 버튼 (임원은 회원만 강퇴 가능)
+        // 방장·임원: 강퇴 (임원은 회원만 강퇴 가능)
         const canKick = !isSelf && (
             (currentRole === '방장' && m.role !== '방장') ||
             (currentRole === '임원' && m.role === '회원')
         );
-        const kickBtn = canKick
-            ? `<button class="btn-kick" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}" title="${t('groupDetail.kick')}">${t('groupDetail.kick')}</button>`
+        const kickItem = canKick
+            ? `<button type="button" class="match-menu-item btn-kick" role="menuitem" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}">${t('groupDetail.kick')}</button>`
             : '';
 
         const li = document.createElement('li');
@@ -335,7 +333,7 @@ function renderMembers(members) {
         li.innerHTML = `
             <span class="member-name">${playerLink(m.id, m.nickname)}${badge}</span>
             <span class="member-rating">${hasRating ? `(${m.rating_rapid})` : `(${t('groupDetail.notLinked')})`}</span>
-            ${roleBtn}${kickBtn}
+            ${matchMenu([roleItem, kickItem])}
         `;
         listEl.appendChild(li);
     });
