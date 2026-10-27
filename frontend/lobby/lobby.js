@@ -37,6 +37,7 @@ async function apiFetch(path, options = {}) {
         const data = await res.json();
         return { ok: res.ok, status: res.status, data };
     } catch {
+        await window.i18nReady;   // 연결 실패가 번역 로드보다 빠르면 키 문자열이 그대로 찍히므로
         return { ok: false, status: 0, data: { detail: t('auth.serverUnreachable') } };
     }
 }
@@ -72,15 +73,18 @@ async function loadGroups() {
 
     const list     = document.getElementById('groups-list');
     const emptyMsg = document.getElementById('groups-empty');
+    document.getElementById('groups-skeleton')?.remove();
 
     if (!result.ok) {
         emptyMsg.textContent = t('lobby.groupsLoadError');
+        emptyMsg.style.display = '';
         return;
     }
 
     list.querySelectorAll('.group-card').forEach(el => el.remove());
 
     if (result.data.length === 0) {
+        emptyMsg.textContent = t('lobby.noGroups');   // 이전 실패 문구가 남지 않도록
         emptyMsg.style.display = '';
         return;
     }

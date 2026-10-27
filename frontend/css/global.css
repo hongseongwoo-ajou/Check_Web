@@ -131,6 +131,46 @@ button {
     font-size: 0.88rem;
 }
 
+/* ===== 스켈레톤 (데이터가 오기 전 내용 모양 자리표시) ===== */
+.skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.25rem 0;
+    list-style: none;
+}
+
+.skeleton-line,
+.skeleton-card {
+    background: linear-gradient(90deg,
+        rgba(var(--overlay-rgb), 0.06) 25%,
+        rgba(var(--overlay-rgb), 0.13) 37%,
+        rgba(var(--overlay-rgb), 0.06) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.skeleton-line  { height: 0.9rem; border-radius: 4px; width: 100%; }
+.skeleton-card  { height: 3.2rem; border-radius: var(--radius); }
+.skeleton-title { display: inline-block; height: 1.6rem; width: 9rem; border-radius: 6px; vertical-align: middle; }
+
+/* 그리드/가로 정렬 컨테이너 안에서도 한 줄을 꽉 채우도록 */
+.skeleton-fill { grid-column: 1 / -1; flex: 1 1 100%; width: 100%; }
+
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-75 { width: 75%; }
+.skeleton-line.w-90 { width: 90%; }
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-line, .skeleton-card { animation: none; }
+}
+
 /* ===== 다크/라이트 모드 전환 버튼 (체스 말 심볼) ===== */
 .theme-toggle-btn {
     display: inline-flex;

@@ -40,7 +40,7 @@
 
                 <!-- 그룹 타이틀 + 초대코드 -->
                 <div class="group-title-row">
-                    <h1 class="page-title" id="group-name">-</h1>
+                    <h1 class="page-title" id="group-name"><span class="skeleton-line skeleton-title" aria-hidden="true"></span></h1>
                     <div class="title-actions">
                         <div class="invite-badge">
                             <span data-i18n="lobby.inviteCodeShortLabel">초대 코드:</span> <code id="invite-code" class="invite-code">-</code>
@@ -58,7 +58,9 @@
                         <button id="btn-write-announcement" class="btn-write-announcement hidden" data-i18n="groupDetail.writeAnnouncement">+ 공지 작성</button>
                     </div>
                     <div id="announcement-latest">
-                        <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
+                        <div class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                            <div class="skeleton-line w-40"></div><div class="skeleton-line w-90"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -71,7 +73,9 @@
 
                 <!-- 진행 중인 투표 / 대진표 (JS로 동적 렌더링) -->
                 <section id="poll-section" class="detail-card">
-                    <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
+                    <div class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                        <div class="skeleton-line w-40"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+                    </div>
                 </section>
 
                 <!-- 최근 경기 내역 (공식 + 친선) -->
@@ -84,7 +88,9 @@
                         </div>
                     </div>
                     <div id="recent-matches">
-                        <p class="loading-msg" style="text-align:left" data-i18n="common.loading">불러오는 중...</p>
+                        <div class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                            <div class="skeleton-line w-90"></div><div class="skeleton-line w-75"></div><div class="skeleton-line w-90"></div><div class="skeleton-line w-60"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -92,7 +98,9 @@
                 <section class="detail-card">
                     <h2 class="card-heading" data-i18n="groupDetail.matchHistoryHeading">지난 경기 결과</h2>
                     <div id="match-history">
-                        <p class="empty-msg-sm" data-i18n="groupDetail.noMatchHistory">아직 기록된 경기가 없습니다.</p>
+                        <div class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                            <div class="skeleton-card"></div><div class="skeleton-card"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -107,7 +115,9 @@
                                 title="멤버 목록 펼치기/접기" aria-label="멤버 목록 펼치기/접기" data-i18n-title="groupDetail.toggleMembers"><span class="members-chevron" aria-hidden="true">▾</span></button>
                     </h2>
                     <ol id="member-list" class="member-list">
-                        <li class="loading-msg" data-i18n="common.loading">불러오는 중...</li>
+                        <li class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                            <div class="skeleton-line w-75"></div><div class="skeleton-line w-60"></div><div class="skeleton-line w-75"></div><div class="skeleton-line w-60"></div><div class="skeleton-line w-75"></div>
+                        </li>
                     </ol>
                 </section>
             </aside>

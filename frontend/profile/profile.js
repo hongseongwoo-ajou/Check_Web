@@ -37,6 +37,7 @@ async function apiFetch(path, options = {}) {
         const data = await res.json();
         return { ok: res.ok, status: res.status, data };
     } catch {
+        await window.i18nReady;   // 연결 실패가 번역 로드보다 빠르면 키 문자열이 그대로 찍히므로
         return { ok: false, status: 0, data: { detail: t('auth.serverUnreachable') } };
     }
 }

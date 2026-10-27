@@ -42,7 +42,11 @@
         <section class="groups-section">
             <h2 class="section-title" data-i18n="lobby.myGroups">내 그룹</h2>
             <div id="groups-list" class="groups-list">
-                <p class="empty-msg" id="groups-empty" data-i18n="lobby.noGroups">가입된 그룹이 없습니다.</p>
+                <!-- 불러오는 동안 '그룹 없음'이 먼저 보이지 않도록 스켈레톤을 보여주고 안내 문구는 숨겨 둠 -->
+                <div id="groups-skeleton" class="skeleton" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                    <div class="skeleton-card"></div><div class="skeleton-card"></div>
+                </div>
+                <p class="empty-msg" id="groups-empty" data-i18n="lobby.noGroups" style="display:none">가입된 그룹이 없습니다.</p>
             </div>
         </section>
     </main>

@@ -74,6 +74,7 @@ async function apiFetch(path, options = {}) {
         const data = await res.json();
         return { ok: res.ok, status: res.status, data };
     } catch {
+        await window.i18nReady;   // 연결 실패가 번역 로드보다 빠르면 키 문자열이 그대로 찍히므로
         return { ok: false, status: 0, data: { detail: t('auth.serverUnreachable') } };
     }
 }
@@ -165,6 +166,15 @@ function showToast(message, type = 'error') {
         el.classList.add('toast-hide');
         setTimeout(() => el.remove(), 300);
     }, type === 'error' ? 4500 : 3000);
+}
+
+// 로딩 자리표시(스켈레톤). kind: 'lines'(목록) | 'cards'(카드형)
+function skeletonHtml(count = 3, kind = 'lines') {
+    const widths = ['w-90', 'w-75', 'w-90', 'w-60', 'w-75'];
+    const items = Array.from({ length: count }, (_, i) =>
+        kind === 'cards' ? '<div class="skeleton-card"></div>' : `<div class="skeleton-line ${widths[i % widths.length]}"></div>`
+    ).join('');
+    return `<div class="skeleton" role="status" aria-label="${t('common.loading')}">${items}</div>`;
 }
 
 function nameWithRating(nickname, rating) {
@@ -485,7 +495,7 @@ document.getElementById('btn-confirm-create-announcement').addEventListener('cli
 async function openAnnouncementListModal() {
     document.getElementById('modal-announcement-list').classList.remove('hidden');
     const el = document.getElementById('announcement-list-content');
-    el.innerHTML = `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
+    el.innerHTML = skeletonHtml(2, 'cards');
 
     const result = await apiFetch(`/api/groups/${groupId}/announcements`);
     if (!result?.ok) {
@@ -667,7 +677,7 @@ document.getElementById('btn-save-pts').addEventListener('click', async () => {
 });
 
 async function loadLeaderboard() {
-    document.getElementById('lb-content').innerHTML = `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
+    document.getElementById('lb-content').innerHTML = skeletonHtml(5);
 
     const result = await apiFetch(`/api/groups/${groupId}/leaderboard`);
     if (!result?.ok) {
@@ -757,8 +767,7 @@ async function openUserProfileModal(memberId) {
 
     const requestId = ++profileRequestId;
     document.getElementById('modal-user-profile').classList.remove('hidden');
-    document.getElementById('profile-modal-content').innerHTML =
-        `<p class="loading-msg" style="text-align:center">${t('common.loading')}</p>`;
+    document.getElementById('profile-modal-content').innerHTML = skeletonHtml(4);
 
     const result = await apiFetch(`/api/groups/${groupId}/members/${memberId}/profile`);
 
@@ -1102,7 +1111,7 @@ function buildPlayingCard(poll, matches, votes = []) {
 async function loadHistory(page = 1) {
     historyPage = page;
     const el = document.getElementById('match-history');
-    el.innerHTML = `<p class="loading-msg">${t('common.loading')}</p>`;
+    el.innerHTML = skeletonHtml(2, 'cards');
 
     const result = await apiFetch(`/api/groups/${groupId}/history?page=${page}`);
     if (!result?.ok) {
@@ -1193,7 +1202,7 @@ async function toggleAccordion(pollId) {
 async function fetchPollMatches(pollId) {
     const body = document.getElementById(`accordion-body-${pollId}`);
     if (!body) return;
-    body.innerHTML = `<p class="accordion-loading">${t('common.loading')}</p>`;
+    body.innerHTML = skeletonHtml(2);
 
     const result = await apiFetch(`/api/polls/${pollId}/matches`);
     if (!result?.ok) {
@@ -1278,7 +1287,7 @@ function renderPollMatches(pollId) {
 
 async function loadRecentMatches() {
     const el = document.getElementById('recent-matches');
-    el.innerHTML = `<p class="loading-msg" style="text-align:left">${t('common.loading')}</p>`;
+    el.innerHTML = skeletonHtml(4);
 
     const result = await apiFetch(`/api/groups/${groupId}/matches`);
     if (!result?.ok) {
@@ -1574,9 +1583,14 @@ async function toggleFolderAccordion(folderId) {
         icon.textContent = '▼';
         openFolderId = folderId;
         if (!folderMatchCache[folderId]) {
-            body.innerHTML = `<p class="accordion-loading">${t('common.loading')}</p>`;
+            body.innerHTML = skeletonHtml(2);
             const result = await apiFetch(`/api/friendly-folders/${folderId}/matches`);
-            folderMatchCache[folderId] = result?.ok ? result.data.matches : [];
+            if (!result?.ok) {
+                // 실패를 '경기 없음'으로 보이거나 빈 결과를 캐시하지 않도록
+                body.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
+                return;
+            }
+            folderMatchCache[folderId] = result.data.matches;
         }
         renderFolderMatches(folderId);
     }
@@ -2251,7 +2265,16 @@ async function refreshPage() {
     if (!membersRes?.ok) {
         if (membersRes?.status === 403 || membersRes?.status === 404) {
             window.location.href = '../lobby/lobby.html';
+            return;
         }
+        // 서버 연결 실패 등: 스켈레톤이 계속 돌지 않도록 실패 안내로 바꿈
+        const failHtml = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
+        ['announcement-latest', 'poll-section', 'recent-matches', 'match-history'].forEach(id => {
+            document.getElementById(id).innerHTML = failHtml;
+        });
+        document.getElementById('member-list').innerHTML = `<li class="empty-msg-sm">${t('groupDetail.loadFailed')}</li>`;
+        document.getElementById('group-name').textContent = '-';
+        showToast(membersRes?.data?.detail || t('groupDetail.loadFailed'));
         return;
     }
 
@@ -2271,8 +2294,11 @@ async function refreshPage() {
 
     renderMembers(members);
 
+    const failHtml = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
     if (pollRes?.ok)    renderPollSection(pollRes.data);
+    else                document.getElementById('poll-section').innerHTML = failHtml;
     if (historyRes?.ok) renderHistoryAccordion(historyRes.data);
+    else                document.getElementById('match-history').innerHTML = failHtml;
 
     renderLatestAnnouncement(annRes?.ok ? annRes.data : null);
     if (matchesRes?.ok) {
@@ -2415,6 +2441,7 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ===== 실행 =====
 
-const _pageLoader = document.getElementById('page-loader');
-const _minDisplay = new Promise(r => setTimeout(r, 400));
-Promise.all([refreshPage(), _minDisplay]).finally(() => _pageLoader.classList.add('hidden'));
+// 전체 화면 로더는 번역이 적용될 때까지만(언어가 바뀌어 보이는 깜빡임 방지) 덮고,
+// 데이터는 각 섹션의 스켈레톤 자리에 도착하는 대로 채운다 (서버가 깨어나는 데 오래 걸려도 화면 구조가 바로 보이게).
+window.i18nReady.finally(() => document.getElementById('page-loader').classList.add('hidden'));
+refreshPage();

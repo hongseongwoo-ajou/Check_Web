@@ -32,7 +32,9 @@
         <section class="profile-card">
             <h2 class="card-heading" data-i18n="profile.summaryHeading">종합 전적</h2>
             <div id="stats-summary-grid" class="stats-summary-grid">
-                <p class="stats-loading" data-i18n="common.loading">불러오는 중...</p>
+                <div class="skeleton skeleton-fill" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                    <div class="skeleton-card"></div>
+                </div>
             </div>
         </section>
 
@@ -58,7 +60,9 @@
         <section class="profile-card">
             <h2 class="card-heading" data-i18n="profile.recentFormHeading">최근 폼</h2>
             <div id="recent-form-row" class="recent-form-row">
-                <p class="stats-loading" data-i18n="common.loading">불러오는 중...</p>
+                <div class="skeleton skeleton-fill" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                    <div class="skeleton-line w-60"></div>
+                </div>
             </div>
         </section>
 
@@ -66,7 +70,9 @@
         <section class="profile-card">
             <h2 class="card-heading" data-i18n="profile.rivalsHeading">주요 라이벌 전적</h2>
             <div id="rivals-list" class="rivals-list">
-                <p class="stats-loading" data-i18n="common.loading">불러오는 중...</p>
+                <div class="skeleton skeleton-fill" role="status" aria-label="불러오는 중..." data-i18n-title="common.loading">
+                    <div class="skeleton-card"></div><div class="skeleton-card"></div>
+                </div>
             </div>
         </section>
 
