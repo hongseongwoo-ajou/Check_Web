@@ -107,9 +107,9 @@ function formatDate(dateStr) {
     }
 }
 
-// 무승부/승자 표시를 한 번에 처리하는 헬퍼 (winnerHtml은 playerLink()/escapeHtml() 결과 등 이미 안전한 HTML)
-function resultLabel(isDraw, winnerHtml) {
-    return isDraw ? t('common.draw') : t('groupDetail.winnerAnnounce', { name: winnerHtml });
+// 경기 기록 줄의 결과 문구. 승자는 이름 강조(winner/match-winner-name)로 보여주므로 무승부일 때만 문구를 표시
+function resultLabel(isDraw) {
+    return isDraw ? t('common.draw') : '';
 }
 
 const isAdmin = () => currentRole === '방장' || currentRole === '임원';
@@ -863,7 +863,6 @@ function buildPlayingCard(poll, matches, votes = []) {
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
             const hasPgn  = !!m.pgn_data;
-            const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
             return `
                 <div class="match-card finished">
                     <div class="match-vs">
@@ -872,7 +871,7 @@ function buildPlayingCard(poll, matches, votes = []) {
                         <span class="match-player${p2Win ? ' winner' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </div>
                     <span class="match-result-badge ${isDraw ? 'draw' : 'win'}">
-                        ${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}
+                        ${resultLabel(isDraw)}
                     </span>
                     ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('groupDetail.editMatch')}</button>
                     <button class="btn-delete-match" data-match-id="${m.id}">${t('groupDetail.deleteMatch')}</button>` : ''}
@@ -1061,7 +1060,6 @@ function renderPollMatches(pollId) {
             const p1Win   = m.winner_id === m.player1_id;
             const p2Win   = m.winner_id === m.player2_id;
             const hasPgn  = !!m.pgn_data;
-            const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
 
             return `
                 <div class="accordion-match-item">
@@ -1070,7 +1068,7 @@ function renderPollMatches(pollId) {
                         <span class="match-vs-sm">vs</span>
                         <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </span>
-                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
                     ${isAdmin() ? `<button class="btn-edit-match" data-match-id="${m.id}">${t('common.edit')}</button>
                     <button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
                     <span class="match-pgn-actions">
@@ -1145,7 +1143,6 @@ function renderRecentMatches(matches) {
         const p2Win    = m.winner_id === m.player2_id;
         const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
         const hasPgn   = !!m.pgn_data;
-        const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
         return `
             <div class="recent-match-item">
                 <div class="recent-match-row">
@@ -1155,7 +1152,7 @@ function renderRecentMatches(matches) {
                         <span class="match-vs-sm">vs</span>
                         <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                     </span>
-                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
+                    <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
                     <span class="match-pgn-actions">
                         <button class="btn-pgn-edit" data-match-id="${m.id}">${hasPgn ? t('groupDetail.pgnEditLabel') : t('groupDetail.pgnAddLabel')}</button>
                         ${hasPgn ? `<button class="btn-pgn-view" data-match-id="${m.id}">${t('groupDetail.pgnViewLabel')}</button>` : ''}
@@ -1433,7 +1430,6 @@ function renderFolderMatches(folderId) {
         const p1Win    = m.winner_id === m.player1_id;
         const p2Win    = m.winner_id === m.player2_id;
         const noteHtml = m.note ? `<p class="recent-match-note">${escapeHtml(m.note)}</p>` : '';
-        const winnerRating = m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined;
         return `
             <div class="accordion-match-item folder-match-item">
                 <span class="match-players">
@@ -1441,7 +1437,7 @@ function renderFolderMatches(folderId) {
                     <span class="match-vs-sm">vs</span>
                     <span class="${p2Win ? 'match-winner-name' : ''}"><span class="color-chip black">${t('groupDetail.blackShort')}</span>${playerLink(m.player2_id, m.player2_nickname, m.player2_rating)}</span>
                 </span>
-                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, playerLink(m.winner_id, m.winner_nickname, winnerRating))}</span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
                 <span class="recent-match-date">${formatDate(m.played_at)}</span>
                 ${isAdmin() ? `<button class="btn-delete-match" data-match-id="${m.id}">${t('common.delete')}</button>` : ''}
                 ${noteHtml}
@@ -1548,7 +1544,7 @@ function renderManageMatchList() {
                     <span class="match-vs-sm">vs</span>
                     <span class="${p2Win ? 'match-winner-name' : ''}">${escapeHtml(nameWithRating(m.player2_nickname, m.player2_rating))}</span>
                 </span>
-                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw, escapeHtml(nameWithRating(m.winner_nickname, m.winner_id === m.player1_id ? m.player1_rating : m.winner_id === m.player2_id ? m.player2_rating : undefined)))}</span>
+                <span class="match-result ${isDraw ? 'draw' : ''}">${resultLabel(isDraw)}</span>
                 ${folderTag}
             </label>`;
     }).join('');
