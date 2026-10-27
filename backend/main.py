@@ -3,10 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from services.matchmaker import make_pairs
+from i18n_messages import localize, to_english, wants_english, validation_message_en
 from pydantic import BaseModel, Field, StringConstraints
 from typing import Optional, Annotated
 from datetime import datetime, timezone, timedelta
@@ -32,7 +35,25 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="체스 동아리 API", version="0.2.0")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """slowapi 기본 응답({"error": "Rate limit exceeded: ..."})은 프론트가 읽는 detail이 없고
+    한국어 화면에도 영어로 나와서, 안내 문구를 detail로 내려준다 (Retry-After 등 헤더는 유지)."""
+    response = JSONResponse(
+        status_code=429,
+        content={"detail": localize(request, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")},
+    )
+    return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """라우트는 한국어 메시지로 HTTPException을 던지고, 영어 화면에서 온 요청이면 여기서 번역한다."""
+    if isinstance(exc.detail, str) and wants_english(request):
+        exc = StarletteHTTPException(status_code=exc.status_code, detail=to_english(exc.detail), headers=exc.headers)
+    return await http_exception_handler(request, exc)
 
 _VALIDATION_FIELD_LABELS = {
     "username": "아이디", "nickname": "이름",
@@ -63,12 +84,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     first = exc.errors()[0]
     field = str(first["loc"][-1]) if first.get("loc") else ""
+    err_type = first.get("type", "")
+    ctx = first.get("ctx", {})
+    if wants_english(request):
+        return JSONResponse(status_code=422, content={"detail": validation_message_en(field, err_type, ctx)})
+
     label = _VALIDATION_FIELD_LABELS.get(field, field or "입력값")
     eun_neun = _josa(label, "은", "는")
     eul_reul = _josa(label, "을", "를")
 
-    err_type = first.get("type", "")
-    ctx = first.get("ctx", {})
     if err_type == "string_too_short" and ctx.get("min_length") == 1:
         detail = f"{label}{eul_reul} 입력해주세요."
     elif err_type == "string_too_short":
@@ -684,8 +708,8 @@ class CreateAnnouncementRequest(BaseModel):
 # ---------- 인증 ----------
 
 @app.get("/health")
-def health_check():
-    return {"status": "ok", "message": "체스 동아리 서버 가동 중"}
+def health_check(request: Request):
+    return {"status": "ok", "message": localize(request, "체스 동아리 서버 가동 중")}
 
 
 @app.get("/")

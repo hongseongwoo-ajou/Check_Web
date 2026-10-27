@@ -11,6 +11,16 @@
 //
 // 언어 전환 시 JS로 그린 동적 콘텐츠까지 바꾸기 위해 페이지를 새로고침한다.
 // 정적 문구만 있는 페이지는 <body data-i18n-static>을 달아 새로고침 없이 data-i18n만 갱신한다.
+// 서버 에러 메시지도 화면 언어로 받기 위해, API 요청에 { 'Accept-Language': 현재 언어 }를 붙인다.
+// 번역 파일 로드 전에도 동작하도록 i18next → 저장된 선택 → 브라우저 언어 순으로 결정.
+window.langHeader = function () {
+    let lang = (typeof i18next !== 'undefined' && (i18next.resolvedLanguage || i18next.language)) || '';
+    if (!lang) {
+        try { lang = localStorage.getItem('i18nextLng') || ''; } catch { /* 저장소 사용 불가 */ }
+    }
+    return { 'Accept-Language': lang || navigator.language || 'ko' };
+};
+
 (function () {
     let resolveReady;
     window.i18nReady = new Promise((resolve) => { resolveReady = resolve; });

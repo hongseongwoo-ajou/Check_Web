@@ -18,7 +18,7 @@ const API_BASE = (() => {
 
     try {
         const res = await fetch(`${API_BASE}/api/me`, {
-            headers: { 'Authorization': `Bearer ${savedToken}` },
+            headers: { ...langHeader(), 'Authorization': `Bearer ${savedToken}` },
         });
         if (res.ok) {
             window.location.href = '../lobby/lobby.html';
@@ -76,7 +76,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     try {
         const res = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...langHeader(), 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
         });
         const data = await res.json();
@@ -116,7 +116,7 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     try {
         const res = await fetch(`${API_BASE}/auth/register`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...langHeader(), 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, nickname, password }),
         });
         const data = await res.json();

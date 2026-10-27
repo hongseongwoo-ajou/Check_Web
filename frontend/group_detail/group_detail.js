@@ -58,6 +58,7 @@ async function apiFetch(path, options = {}) {
         const res = await fetch(`${API_BASE}${path}`, {
             ...options,
             headers: {
+                ...langHeader(),
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
                 ...(options.headers || {}),

@@ -8,7 +8,7 @@ const API_BASE = (() => {
 async function checkServerStatus() {
     const el = document.getElementById('server-status');
     try {
-        const res = await fetch(`${API_BASE}/health`);
+        const res = await fetch(`${API_BASE}/health`, { headers: langHeader() });
         const data = await res.json();
         await window.i18nReady;
         el.textContent = `${t('index.serverOk')} — ${data.message}`;
