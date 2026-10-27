@@ -37,20 +37,21 @@
 :root[data-theme="light"] {
     --color-bg: #f4f2ec;
     --color-surface: #ffffff;
-    --color-primary: #b8863a;
-    --color-primary-dark: #96692a;
+    /* 흰 배경 위 금색 글자(4.4:1)와 금색 버튼 위 어두운 글자(3.9:1)가 모두 읽히도록 맞춘 값 */
+    --color-primary: #9b7131;
+    --color-primary-dark: #84602a;
     --color-text: #232330;
     --color-text-muted: #6b6b78;
     --color-border: #ddd8ca;
 
     --color-danger:  #cf4646;
-    --color-success: #2f9e64;
+    --color-success: #217a4b;   /* 연한 초록 배경 위에서도 4.3:1 이상 */
     --color-info:    #2f7dd1;
 
-    --color-primary-rgb: 184, 134, 58;
+    --color-primary-rgb: 155, 113, 49;
     --color-border-rgb:  221, 216, 202;
     --color-danger-rgb:  207, 70, 70;
-    --color-success-rgb: 47, 158, 100;
+    --color-success-rgb: 33, 122, 75;
     --color-info-rgb:    47, 125, 209;
     --overlay-rgb: 0, 0, 0;
 }

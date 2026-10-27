@@ -376,6 +376,7 @@
 
 .official-badge.official { background: rgba(var(--color-primary-rgb), 0.15); color: var(--color-primary); }
 .official-badge.friendly { background: rgba(155, 126, 212, 0.15); color: #b39ee8; }
+:root[data-theme="light"] .official-badge.friendly { color: #7656c4; }
 
 /* ===== 경기 유형 선택 (투표 생성 모달) ===== */
 .match-type-toggle {
@@ -1348,6 +1349,8 @@
     color: #e09060;
 }
 
+:root[data-theme="light"] .btn-demote { color: #a0521f; }
+
 .btn-kick {
     font-size: 0.68rem;
     font-weight: 700;
@@ -1721,6 +1724,11 @@
 .rank-2 td:first-child { color: #a8a8a8; font-weight: 700; }
 .rank-3 td:first-child { color: #cd7f32; font-weight: 700; }
 
+/* 라이트 모드: 흰 배경 위에서 읽히도록 진한 금/은/동 */
+:root[data-theme="light"] .rank-1 td:first-child { color: #a8750a; }
+:root[data-theme="light"] .rank-2 td:first-child { color: #757575; }
+:root[data-theme="light"] .rank-3 td:first-child { color: #9a5b1e; }
+
 /* ===== 모달 ===== */
 .modal {
     position: fixed;
@@ -1791,8 +1799,8 @@
 .btn-reopen-poll {
     padding: 0.38rem 0.85rem;
     background: transparent;
-    border: 1px solid #7b9ed4;
-    color: #7b9ed4;
+    border: 1px solid var(--color-info);
+    color: var(--color-info);
     border-radius: var(--radius);
     font-size: 0.82rem;
     font-weight: 600;
@@ -1800,7 +1808,7 @@
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
 }
-.btn-reopen-poll:hover { background: #7b9ed4; color: #fff; }
+.btn-reopen-poll:hover { background: var(--color-info); color: var(--color-surface); }
 
 /* ===== 활동 기록 ===== */
 #activity-log-btn-row {
@@ -1859,7 +1867,7 @@
     border-radius: 4px;
     font-size: 0.72rem;
     font-weight: 700;
-    color: #fff;
+    color: #1a1a2e;         /* 배지 배경색(연한 색)이 두 테마 공통이라 어두운 글씨가 더 잘 읽힘 */
     white-space: nowrap;
     margin-top: 0.1rem;
 }
