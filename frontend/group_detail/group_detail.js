@@ -146,10 +146,15 @@ function matchMenu(items) {
         </div>`;
 }
 
+// 열린 메뉴는 body로 옮겨 띄운다. 반투명(opacity) 카드처럼 쌓임 맥락을 만드는 조상 안에 있으면
+// 뒤따르는 요소가 메뉴 위에 그려져 클릭을 가로채기 때문. 닫을 때 원래 자리로 되돌린다.
 function closeMatchMenus() {
     document.querySelectorAll('.match-menu-list:not(.hidden)').forEach(list => {
         list.classList.add('hidden');
-        list.previousElementSibling?.setAttribute('aria-expanded', 'false');
+        const home = list._home;
+        if (home?.isConnected) home.appendChild(list);
+        else list.remove();               // 그사이 목록이 다시 그려져 원래 자리가 사라진 경우
+        home?.querySelector('.btn-match-menu')?.setAttribute('aria-expanded', 'false');
     });
 }
 
@@ -172,10 +177,13 @@ document.addEventListener('click', (e) => {
         closeMatchMenus();
         return;
     }
-    const list    = toggle.nextElementSibling;
-    const wasOpen = !list.classList.contains('hidden');
+    const wasOpen = toggle.getAttribute('aria-expanded') === 'true';
     closeMatchMenus();
     if (!wasOpen) {
+        const home = toggle.closest('.match-menu');
+        const list = home.querySelector('.match-menu-list');
+        list._home = home;
+        document.body.appendChild(list);
         list.classList.remove('hidden');
         toggle.setAttribute('aria-expanded', 'true');
         positionMatchMenu(toggle, list);
