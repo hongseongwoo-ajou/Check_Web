@@ -2180,7 +2180,17 @@ function renderMoveList() {
     if (active) active.scrollIntoView({ block: 'nearest' });
 }
 
+// Lichess 분석판 주소: 수순만 넘기므로 Lichess에 경기가 저장되지 않고, #ply로 현재 수에서 열린다
+function lichessAnalysisUrl() {
+    const moves = pgnSans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ` : '') + san).join(' ');
+    return `https://lichess.org/analysis/pgn/${encodeURIComponent(moves)}#${pgnMoveIndex}`;
+}
+
 function updateViewerControls() {
+    const lichessBtn = document.getElementById('pgn-btn-lichess');
+    lichessBtn.classList.toggle('hidden', !pgnSans.length);
+    lichessBtn.href = pgnSans.length ? lichessAnalysisUrl() : '#';
+
     const total = pgnPositions.length - 1;
     document.getElementById('pgn-move-counter').textContent = `${pgnMoveIndex} / ${total}`;
     document.getElementById('pgn-btn-first').disabled = pgnMoveIndex === 0;

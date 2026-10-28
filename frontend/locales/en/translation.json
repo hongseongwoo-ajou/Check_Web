@@ -232,6 +232,8 @@
     "pgnNext": "Next",
     "pgnLast": "Last",
     "flipBoard": "Flip Board",
+    "openInLichess": "Analyze on Lichess",
+    "openInLichessHint": "Open the Lichess analysis board with the engine at the current move (new tab)",
     "action": {
       "pollClose": "Poll Closed",
       "pollReopen": "Poll Reopened",

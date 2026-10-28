@@ -232,6 +232,8 @@
     "pgnNext": "다음",
     "pgnLast": "끝으로",
     "flipBoard": "판 돌리기",
+    "openInLichess": "Lichess에서 분석",
+    "openInLichessHint": "현재 수부터 Lichess 분석판에서 엔진으로 분석합니다 (새 탭)",
     "action": {
       "pollClose": "투표 종료",
       "pollReopen": "투표 재개",
