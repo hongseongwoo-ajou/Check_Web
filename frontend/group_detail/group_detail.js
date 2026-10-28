@@ -2317,14 +2317,64 @@ function positionWhitePct(fen) {
 }
 
 const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-// 백 기준 기물 점수 차
-function materialDiff(fen) {
-    let d = 0;
-    for (const ch of fen.split(' ')[0]) {
-        const v = PIECE_VALUE[ch.toLowerCase()];
-        if (v !== undefined) d += ch === ch.toUpperCase() ? v : -v;
+
+// 교환 계산(SEE): 둘 차례인 쪽이 sq의 기물을 잡고, 서로 가장 싼 기물로 되잡기를 이어갈 때
+// 잡는 쪽이 얻는 최대 기물 점수(0 이상). 불리하면 언제든 멈출 수 있다고 본다.
+function seeGain(chess, sq) {
+    const caps = chess.moves({ verbose: true }).filter(m => m.to === sq && m.captured && !m.flags.includes('e'));
+    if (!caps.length) return 0;
+    const order = p => (p === 'k' ? 100 : PIECE_VALUE[p]);
+    caps.sort((a, b) => order(a.piece) - order(b.piece));
+    const m = caps[0];
+    chess.move(m);
+    const gain = PIECE_VALUE[m.captured] - seeGain(chess, sq);
+    chess.undo();
+    return Math.max(0, gain);
+}
+
+// fen에서 둘 차례인 쪽이 상대 기물(킹 제외)을 잡아 교환 끝에 얻을 수 있는 점수: { 칸: { gain, piece } }
+function captureGains(fen) {
+    const c = new Chess(fen);
+    const victim = c.turn() === 'w' ? 'b' : 'w';
+    const gains = {};
+    for (const sq of ALL_SQUARES) {
+        const p = c.get(sq);
+        if (!p || p.color !== victim || p.type === 'k') continue;
+        const gain = seeGain(c, sq);
+        if (gain > 0) gains[sq] = { gain, piece: p.type };
     }
-    return d;
+    return gains;
+}
+
+const ALL_SQUARES = [...'abcdefgh'].flatMap(f => [1, 2, 3, 4, 5, 6, 7, 8].map(r => f + r));
+
+// 상대 차례로 바꾼 국면 (지금 상대가 무엇을 잡을 수 있는지 = 이미 걸려 있던 위협). 체크 중이면 null
+function swapTurnFen(fen) {
+    const f = fen.split(' ');
+    f[1] = f[1] === 'w' ? 'b' : 'w';
+    f[3] = '-';
+    const swapped = f.join(' ');
+    const c = new Chess(swapped);
+    return c.validate_fen(swapped).valid && !new Chess(fen).in_check() ? swapped : null;
+}
+
+// i번째 수가 기물 희생인지: 둔 뒤 상대가 내 기물을 잡아(되잡기까지 계산) 얻는 점수가
+// 이 수로 잡은 기물보다 1 이상 크면 희생. 단, 수를 두기 전부터 같은 칸에서 그만큼 걸려 있던 기물은
+// 새로 내준 게 아니므로(예: 포크에서 퀸을 피하고 룩을 내줌) 빼고 센다. 폰 하나 내주는 건 희생으로 안 친다.
+function isSacrifice(i) {
+    const before = pgnPositions[i - 1], after = pgnPositions[i];
+    const mv = pgnMovesVerbose[i - 1];
+    if (mv.promotion) return false;
+    const gainedNow = mv.captured ? PIECE_VALUE[mv.captured] : 0;
+    const swapped   = swapTurnFen(before);
+    const already   = swapped ? captureGains(swapped) : {};
+    let exposed = 0;
+    for (const [sq, { gain, piece }] of Object.entries(captureGains(after))) {
+        const prev = already[sq];
+        if (prev && prev.piece === piece && prev.gain >= gain) continue;
+        exposed = Math.max(exposed, gain);
+    }
+    return exposed >= 2 && exposed - gainedNow >= 1;
 }
 
 function uciOf(mv) {
@@ -2333,7 +2383,17 @@ function uciOf(mv) {
 
 // i번째 수(1부터)의 평가. 앞뒤 국면 분석이 끝나야 매길 수 있고, 아니면 null
 //   brilliant !! · great ! · best · excellent · good · inaccuracy ?! · mistake ? · blunder ??
+// 앞뒤 국면 분석이 끝나면 결과가 바뀌지 않으므로 기억해 둔다 (희생 판단의 교환 계산이 무거워서)
+const moveClassMemo = new Map();
 function classifyMove(i) {
+    const key = `${pgnPositions[i - 1]}|${pgnPositions[i]}|${uciOf(pgnMovesVerbose[i - 1])}`;
+    if (moveClassMemo.has(key)) return moveClassMemo.get(key);
+    const result = computeMoveClass(i);
+    if (result) moveClassMemo.set(key, result);
+    return result;
+}
+
+function computeMoveClass(i) {
     const before = pgnPositions[i - 1], after = pgnPositions[i];
     const eb = evalCache[before];
     if (!eb?.done) return null;
@@ -2350,19 +2410,17 @@ function classifyMove(i) {
     const bestUci    = eb.best;
 
     if (isBest || loss <= 2) {
-        // 기물 희생: 둔 뒤 상대의 최선 응수까지 보고 내 기물 점수가 2 이상 줄었는데도 형세가 괜찮다
+        // 기물 희생인데도 형세가 괜찮다(최선급 수). 이미 크게 이긴 국면이면 체크메이트로 가는 희생만 인정
         const ea = evalCache[after];
-        if (ea?.best && afterPct >= 45 && bestPct < 97) {
-            const c = new Chess(after);
-            const reply = c.move({ from: ea.best.slice(0, 2), to: ea.best.slice(2, 4), promotion: ea.best[4] });
-            if (reply) {
-                const sign = white ? 1 : -1;
-                const lost = sign * (materialDiff(before) - materialDiff(c.fen()));
-                if (lost >= 2 && !pgnMovesVerbose[i - 1].promotion) return { key: 'brilliant', bestUci };
-            }
+        const matesNow = ea && 'mate' in ea && (white ? ea.mate > 0 : ea.mate < 0);
+        if (afterPct >= 45 && (bestPct < 97 || matesNow) && isSacrifice(i)) {
+            return { key: 'brilliant', bestUci };
         }
-        // 유일하게 좋은 수: 두 번째 후보와 승률 차이가 크다
-        if (isBest && eb.second) {
+        // 유일하게 좋은 수: 두 번째 후보와 승률 차이가 크다.
+        // 방금 잡힌 칸에서 되잡는 수는 당연한 수라서 제외
+        const mv = pgnMovesVerbose[i - 1], prevMv = pgnMovesVerbose[i - 2];
+        const recapture = mv.captured && prevMv?.captured && prevMv.to === mv.to;
+        if (isBest && eb.second && !recapture) {
             const gap = bestPct - mine(whiteWinPct(eb.second));
             if (gap >= 15 && bestPct < 97) return { key: 'great', bestUci };
         }
