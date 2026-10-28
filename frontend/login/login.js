@@ -73,6 +73,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         return;
     }
 
+    // 응답을 기다리는 동안 버튼을 막아 로그인 요청이 중복으로 가지 않게 한다
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    let navigating = false;
+
     try {
         const res = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
@@ -89,9 +95,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('username', username);
         localStorage.setItem('nickname', data.nickname);
+        navigating = true;   // 이동하는 동안에도 다시 누르지 못하게 버튼을 막아 둔다
         window.location.href = '../lobby/lobby.html';
     } catch {
         errorEl.textContent = t('auth.serverUnreachable');
+    } finally {
+        if (!navigating) submitBtn.disabled = false;
     }
 });
 

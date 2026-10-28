@@ -462,6 +462,18 @@ def _is_sha256(h: str) -> bool:
     return len(h) == 64 and all(c in "0123456789abcdef" for c in h)
 
 
+def _token_valid(row) -> bool:
+    """저장된 토큰이 있고 만료되지 않았는지."""
+    if not row["token"]:
+        return False
+    if not row["token_expires_at"]:
+        return True
+    try:
+        return now_kst() <= datetime.fromisoformat(row["token_expires_at"])
+    except ValueError:
+        return True
+
+
 def get_current_user(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="인증이 필요합니다.")
@@ -755,19 +767,25 @@ def login(request: Request, req: LoginRequest, background_tasks: BackgroundTasks
     if not row or not _verify_password(req.password, row["password"]):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 틀렸습니다.")
 
-    token = secrets.token_hex(32)
+    # 아직 유효한 토큰이 있으면 그대로 재사용한다. 새로 발급하면 기존 토큰이 무효가 되어
+    # 로그인 요청이 중복되거나(버튼 연타) 다른 기기에서 로그인했을 때 먼저 로그인한 쪽이 튕긴다.
+    token = row["token"] if _token_valid(row) else secrets.token_hex(32)
     expires_at = (now_kst() + timedelta(days=TOKEN_EXPIRE_DAYS)).isoformat(timespec="seconds")
     with get_db() as conn:
         if _is_sha256(row["password"]):
             conn.execute(
-                "UPDATE users SET token = ?, token_expires_at = ?, password = ? WHERE username = ?",
-                (token, expires_at, hash_password(req.password), req.username),
+                "UPDATE users SET password = ? WHERE username = ?",
+                (hash_password(req.password), req.username),
             )
-        else:
-            conn.execute(
-                "UPDATE users SET token = ?, token_expires_at = ? WHERE username = ?",
-                (token, expires_at, req.username),
-            )
+        # 토큰이 읽은 시점 그대로일 때만 바꾼다. 동시에 들어온 다른 로그인이 먼저 새 토큰을
+        # 저장했다면 이 UPDATE는 건너뛰고, 아래에서 그 토큰을 함께 쓴다.
+        conn.execute(
+            "UPDATE users SET token = ?, token_expires_at = ? WHERE username = ? AND token IS ?",
+            (token, expires_at, req.username, row["token"]),
+        )
+        token = conn.execute(
+            "SELECT token FROM users WHERE username = ?", (req.username,)
+        ).fetchone()["token"]
         conn.commit()
 
     # 연동된 Chess.com 계정이 있고 1시간 이상 지났을 때만 백그라운드 갱신
