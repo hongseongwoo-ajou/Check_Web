@@ -2110,10 +2110,11 @@ function openPgnViewer(pgn, p1Name, p2Name) {
     document.getElementById('pgn-player-black').textContent = `⬛ ${t('groupDetail.blackLabel')}: ${p2Name}`;
     document.getElementById('modal-pgn-viewer').classList.remove('hidden');
 
-    // 보드 크기 계산 (모달 내부 너비 기준)
+    // 보드 크기 계산 (모달 내부 너비 기준, 왼쪽 평가 막대 22px + 간격 6px 제외)
     const modalContent = document.querySelector('#modal-pgn-viewer .modal-content');
-    const availableWidth = modalContent ? modalContent.clientWidth - 48 : 340;
+    const availableWidth = modalContent ? modalContent.clientWidth - 48 - 28 : 312;
     const boardSize = Math.min(380, availableWidth);
+    document.getElementById('pgn-eval-bar').classList.remove('flipped');
 
     const boardEl = document.getElementById('pgn-board');
     boardEl.style.width = boardSize + 'px';
@@ -2142,8 +2143,132 @@ function openPgnViewer(pgn, p1Name, p2Name) {
         });
         renderMoveList();
         updateViewerControls();
+        initEngine();
+        updateEval();
     });
 }
+
+// ===== 형세 평가 막대 (Stockfish를 보는 사람의 브라우저 Web Worker에서 실행) =====
+
+const EVAL_DEPTH = 16;
+let sfWorker     = null;   // 처음 기보를 열 때 만든다 (엔진 파일 ≈7MB는 이때 한 번만 내려받음)
+let sfReady      = false;  // uciok → isready → readyok 까지 끝남
+let sfFailed     = false;  // Worker/WASM을 쓸 수 없는 환경이면 막대를 숨긴다
+let sfSearching  = false;
+let sfCurrentFen = null;   // 지금 탐색 중인 국면
+let sfPendingFen = null;   // 지금 탐색을 멈춘 뒤 이어서 볼 국면
+const evalCache  = {};     // fen → { cp | mate (백 기준), depth }
+
+function initEngine() {
+    if (sfWorker || sfFailed) return;
+    try {
+        if (typeof WebAssembly !== 'object') throw new Error('no wasm');
+        sfWorker = new Worker('../vendor/stockfish/stockfish-18-lite-single.js');
+    } catch {
+        sfFailed = true;
+        renderEvalBar();
+        return;
+    }
+    sfWorker.onmessage = e => onEngineLine(String(e.data));
+    sfWorker.onerror = () => {
+        sfFailed = true;
+        sfWorker = null;
+        renderEvalBar();
+    };
+    sfWorker.postMessage('uci');
+}
+
+function startSearch() {
+    sfCurrentFen = sfPendingFen;
+    sfPendingFen = null;
+    sfSearching  = true;
+    sfWorker.postMessage(`position fen ${sfCurrentFen}`);
+    sfWorker.postMessage(`go depth ${EVAL_DEPTH}`);
+}
+
+function onEngineLine(line) {
+    if (line === 'uciok') {
+        sfWorker.postMessage('setoption name Hash value 16');
+        sfWorker.postMessage('isready');
+    } else if (line === 'readyok') {
+        sfReady = true;
+        if (sfPendingFen) startSearch();
+    } else if (line.startsWith('bestmove')) {
+        sfSearching = false;
+        if (sfPendingFen) startSearch();
+    } else if (line.startsWith('info') && sfCurrentFen && !sfPendingFen) {
+        // 경계값(lowerbound/upperbound)은 확정 점수가 아니므로 건너뛴다
+        const m = line.match(/ depth (\d+) .*?score (cp|mate) (-?\d+)/);
+        if (!m || / (lower|upper)bound/.test(line)) return;
+        const sign = sfCurrentFen.split(' ')[1] === 'w' ? 1 : -1;   // 엔진 점수는 둘 차례 기준 → 백 기준으로
+        const val  = sign * parseInt(m[3], 10);
+        evalCache[sfCurrentFen] = { [m[2]]: val, depth: parseInt(m[1], 10) };
+        if (sfCurrentFen === pgnPositions[pgnMoveIndex]) renderEvalBar();
+    }
+}
+
+// 현재 국면 평가: 캐시가 충분히 깊으면 그대로, 아니면 엔진에 맡긴다(진행 중 탐색은 멈추고 교체)
+function updateEval() {
+    const fen = pgnPositions[pgnMoveIndex];
+    renderEvalBar();
+    if (!sfWorker || sfFailed || !fen || gameOverResult(fen)) return;
+    if (evalCache[fen]?.depth >= EVAL_DEPTH) return;
+    sfPendingFen = fen;
+    if (!sfReady) return;                    // readyok 때 시작
+    if (sfSearching) sfWorker.postMessage('stop');   // bestmove를 받으면 이어서 시작
+    else startSearch();
+}
+
+function stopEngine() {
+    sfPendingFen = null;
+    if (sfWorker && sfSearching) sfWorker.postMessage('stop');
+}
+
+// 체크메이트·스테일메이트 등 끝난 국면은 엔진 없이 결과를 표시
+function gameOverResult(fen) {
+    const c = new Chess(fen);
+    if (c.in_checkmate()) return c.turn() === 'w' ? '0-1' : '1-0';
+    if (c.in_stalemate() || c.insufficient_material()) return '½';
+    return null;
+}
+
+function renderEvalBar() {
+    const bar = document.getElementById('pgn-eval-bar');
+    bar.classList.toggle('hidden', sfFailed);
+    if (sfFailed) return;
+
+    const fen    = pgnPositions[pgnMoveIndex];
+    const over   = fen ? gameOverResult(fen) : null;
+    const ev     = fen ? evalCache[fen] : null;
+    const fill   = bar.querySelector('.pgn-eval-fill');
+    const labelEl = bar.querySelector('.pgn-eval-label');
+    let whitePct = null, label = '…';
+
+    if (over) {
+        whitePct = over === '1-0' ? 100 : over === '0-1' ? 0 : 50;
+        label = over;
+    } else if (ev && 'mate' in ev) {
+        whitePct = ev.mate > 0 ? 100 : 0;
+        label = `M${Math.abs(ev.mate)}`;
+    } else if (ev) {
+        // Lichess와 같은 승률 곡선: 점수(센티폰) → 백 몫(%)
+        whitePct = 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * ev.cp)) - 1);
+        const pawns = Math.abs(ev.cp) / 100;
+        label = pawns >= 10 ? pawns.toFixed(0) : pawns.toFixed(1);
+    }
+
+    bar.classList.toggle('is-loading', !over && !ev);
+    if (whitePct !== null) {     // 계산 중이면 막대는 직전 값 그대로 둔다
+        fill.style.height = `${whitePct}%`;
+        bar.classList.toggle('black-better', whitePct < 50);
+    }
+    labelEl.textContent = label;
+}
+
+// 기보 창을 닫으면 탐색을 멈춘다 (닫는 경로가 여러 곳이라 클래스 변화를 지켜본다)
+new MutationObserver(() => {
+    if (document.getElementById('modal-pgn-viewer').classList.contains('hidden')) stopEngine();
+}).observe(document.getElementById('modal-pgn-viewer'), { attributes: true, attributeFilter: ['class'] });
 
 function renderMoveList() {
     const el = document.getElementById('pgn-move-list');
@@ -2212,6 +2337,7 @@ function pgnGoTo(index) {
     if (pgnBoardInst) pgnBoardInst.position(pgnPositions[pgnMoveIndex], false);
     renderMoveList();
     updateViewerControls();
+    updateEval();
 }
 
 document.getElementById('pgn-btn-first').addEventListener('click', () => pgnGoTo(0));
@@ -2220,6 +2346,7 @@ document.getElementById('pgn-btn-next').addEventListener('click',  () => pgnGoTo
 document.getElementById('pgn-btn-last').addEventListener('click',  () => pgnGoTo(pgnPositions.length - 1));
 document.getElementById('pgn-btn-flip').addEventListener('click', () => {
     if (pgnBoardInst) pgnBoardInst.orientation('flip');
+    document.getElementById('pgn-eval-bar').classList.toggle('flipped');
     const topEl = document.getElementById('pgn-player-black');
     const botEl = document.getElementById('pgn-player-white');
     const tmp = topEl.textContent;

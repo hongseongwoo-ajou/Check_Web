@@ -2176,6 +2176,87 @@
     /* 너비는 JS에서 동적으로 설정 */
 }
 
+/* ===== 형세 평가 막대 (체스판 왼쪽) ===== */
+.pgn-board-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+}
+
+.pgn-eval-bar {
+    position: relative;
+    width: 22px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 3px;
+    background: #403d39;          /* 흑 몫 — 테마와 무관하게 체스 색 */
+    border: 1px solid var(--color-border);
+}
+
+/* 백 몫: 아래에서부터 채운다. 판을 돌리면 위에서부터 */
+.pgn-eval-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 50%;
+    background: #f0efe9;
+    transition: height 0.35s ease;
+}
+
+.pgn-eval-bar.flipped .pgn-eval-fill {
+    top: 0;
+    bottom: auto;
+}
+
+/* 점수는 유리한 쪽 끝에 표시 */
+.pgn-eval-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 3px;
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: #403d39;
+    font-variant-numeric: tabular-nums;
+}
+
+.pgn-eval-bar.black-better .pgn-eval-label {
+    top: 3px;
+    bottom: auto;
+    color: #f0efe9;
+}
+
+.pgn-eval-bar.flipped .pgn-eval-label {
+    top: 3px;
+    bottom: auto;
+}
+
+.pgn-eval-bar.flipped.black-better .pgn-eval-label {
+    top: auto;
+    bottom: 3px;
+}
+
+.pgn-eval-bar.is-loading .pgn-eval-fill {
+    opacity: 0.55;
+}
+
+.pgn-eval-bar.is-loading .pgn-eval-label {
+    animation: pgn-eval-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pgn-eval-pulse {
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pgn-eval-fill { transition: none; }
+    .pgn-eval-bar.is-loading .pgn-eval-label { animation: none; }
+}
+
 /* ===== 뷰어 컨트롤 ===== */
 .pgn-controls {
     display: flex;

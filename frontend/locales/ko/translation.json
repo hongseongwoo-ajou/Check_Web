@@ -233,6 +233,7 @@
     "pgnLast": "끝으로",
     "flipBoard": "판 돌리기",
     "openInLichess": "Lichess에서 분석",
+    "evalBarTitle": "형세 평가 (Stockfish) — 백이 유리할수록 흰색이 늘어납니다",
     "openInLichessHint": "현재 수부터 Lichess 분석판에서 엔진으로 분석합니다 (새 탭)",
     "action": {
       "pollClose": "투표 종료",

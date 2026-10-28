@@ -233,6 +233,7 @@
     "pgnLast": "Last",
     "flipBoard": "Flip Board",
     "openInLichess": "Analyze on Lichess",
+    "evalBarTitle": "Evaluation (Stockfish) — more white means White is better",
     "openInLichessHint": "Open the Lichess analysis board with the engine at the current move (new tab)",
     "action": {
       "pollClose": "Poll Closed",

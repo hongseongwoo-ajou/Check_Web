@@ -19,6 +19,7 @@ import secrets
 import bcrypt
 import urllib.request
 import json
+import mimetypes
 import os
 import re
 import contextlib
@@ -2600,6 +2601,9 @@ def get_dashboard(group_id: int, user=Depends(get_current_user)):
 
 
 # ===== 프론트엔드 정적 파일 서빙 (모든 API 라우트 이후에 마운트) =====
+# 기보 뷰어 엔진(Stockfish)의 .wasm — OS의 MIME 표에 없으면 application/wasm으로 나가지 않아
+# 브라우저가 스트리밍 컴파일을 못 하므로 명시해 둔다
+mimetypes.add_type("application/wasm", ".wasm")
 _frontend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
 if os.path.isdir(_frontend):
     app.mount("/", StaticFiles(directory=_frontend, html=True), name="static")

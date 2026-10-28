@@ -293,7 +293,13 @@
             <div class="pgn-viewer-body">
                 <div class="pgn-board-wrap">
                     <div id="pgn-player-black" class="pgn-player pgn-player-black">⬛ -</div>
-                    <div id="pgn-board"></div>
+                    <div class="pgn-board-row">
+                        <div id="pgn-eval-bar" class="pgn-eval-bar is-loading" title="형세 평가 (Stockfish)" data-i18n-title="groupDetail.evalBarTitle">
+                            <div class="pgn-eval-fill"></div>
+                            <span class="pgn-eval-label"></span>
+                        </div>
+                        <div id="pgn-board"></div>
+                    </div>
                     <div id="pgn-player-white" class="pgn-player pgn-player-white">⬜ -</div>
                 </div>
                 <div class="pgn-controls">
