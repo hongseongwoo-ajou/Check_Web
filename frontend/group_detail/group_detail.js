@@ -51,6 +51,8 @@ let pgnPositions  = [];   // FEN strings: [0]=초기, [n]=n번째 수 후
 let pgnSans       = [];   // SAN 수 목록
 let pgnMoveIndex  = 0;
 let pgnBoardInst  = null; // chessboard.js 인스턴스
+let pgnBookPlies  = 0;    // 처음부터 몇 수까지 이론수인지
+let pgnOpening    = null; // 이 기보의 오프닝 { eco, name }
 
 // ===== API 헬퍼 =====
 
@@ -2105,6 +2107,10 @@ function openPgnViewer(pgn, p1Name, p2Name) {
     }
 
     pgnMoveIndex = 0;
+    pgnBookPlies = 0;
+    pgnOpening   = null;
+    renderOpeningName();
+    applyOpeningBook();
 
     document.getElementById('pgn-viewer-title').textContent = `${p1Name} vs ${p2Name}`;
     document.getElementById('pgn-player-white').textContent = `⬜ ${t('groupDetail.whiteLabel')}: ${p1Name}`;
@@ -2386,6 +2392,7 @@ function uciOf(mv) {
 // 앞뒤 국면 분석이 끝나면 결과가 바뀌지 않으므로 기억해 둔다 (희생 판단의 교환 계산이 무거워서)
 const moveClassMemo = new Map();
 function classifyMove(i) {
+    if (i <= pgnBookPlies) return { key: 'book' };   // 이론수는 엔진 분석 없이 바로 표시
     const key = `${pgnPositions[i - 1]}|${pgnPositions[i]}|${uciOf(pgnMovesVerbose[i - 1])}`;
     if (moveClassMemo.has(key)) return moveClassMemo.get(key);
     const result = computeMoveClass(i);
@@ -2433,12 +2440,63 @@ function computeMoveClass(i) {
     return { key: 'blunder', bestUci };
 }
 
+const BOOK_ICON = '<svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="currentColor" aria-hidden="true">'
+    + '<path d="M12 6.3C10.3 5 7.9 4.4 5 4.4c-1.1 0-2.1.1-3 .3v14.1c.9-.2 1.9-.3 3-.3 2.9 0 5.3.7 7 1.9 1.7-1.2 4.1-1.9 7-1.9 1.1 0 2.1.1 3 .3V4.7c-.9-.2-1.9-.3-3-.3-2.9 0-5.3.6-7 1.9zm-1 12c-1.7-.7-3.7-1-6-1-.3 0-.7 0-1 .1V6.5l1-.1c2.4 0 4.5.5 6 1.5v10.4zm9-.9c-.3-.1-.7-.1-1-.1-2.3 0-4.3.3-6 1V7.9c1.5-1 3.6-1.5 6-1.5l1 .1v10.9z"/></svg>';
+
 const MOVE_CLASS_SYMBOL = {
+    book: BOOK_ICON,
     brilliant: '!!', great: '!', best: '★', excellent: '✓', good: '✓',
     inaccuracy: '?!', mistake: '?', blunder: '??',
 };
 // 수 목록에 표시를 붙이는 평가 (나머지는 판 아래 한 줄에서만 보여준다)
 const MOVE_CLASS_MARKED = new Set(['brilliant', 'great', 'inaccuracy', 'mistake', 'blunder']);
+
+// ===== 오프닝 (이론수·오프닝 이름) =====
+// Lichess chess-openings 목록(CC0)에서 만든 국면표. 기보 창을 처음 열 때 한 번만 받는다.
+let openingBookPromise = null;
+function loadOpeningBook() {
+    if (!openingBookPromise) {
+        openingBookPromise = fetch('../vendor/openings/openings.json')
+            .then(res => (res.ok ? res.json() : null))
+            .catch(() => null);
+    }
+    return openingBookPromise;
+}
+
+const bookKey = fen => fen.split(' ').slice(0, 3).join(' ');   // 앙파상 칸·수 번호는 비교하지 않는다
+
+async function applyOpeningBook() {
+    const positions = pgnPositions;
+    const book = await loadOpeningBook();
+    if (!book || positions !== pgnPositions) return;   // 받는 사이 다른 기보를 열었으면 버림
+
+    // 첫 수부터 이어서 목록에 있는 국면까지가 이론수
+    let plies = 0;
+    while (plies + 1 < positions.length && bookKey(positions[plies + 1]) in book.book) plies++;
+
+    // 오프닝 이름은 기보에서 이름이 붙은 가장 깊은 국면 기준
+    let opening = null;
+    for (let i = 1; i < positions.length; i++) {
+        const idx = book.book[bookKey(positions[i])];
+        if (idx >= 0) {
+            const [eco, name] = book.names[idx].split('\t');
+            opening = { eco, name };
+        }
+    }
+    pgnBookPlies = plies;
+    pgnOpening   = opening;
+    renderOpeningName();
+    if (pgnViewerOpen()) renderEvalViews();
+}
+
+function renderOpeningName() {
+    const el = document.getElementById('pgn-opening');
+    el.classList.toggle('hidden', !pgnOpening);
+    if (!pgnOpening) return;
+    el.innerHTML = `${BOOK_ICON}<span class="pgn-opening-eco">${escapeHtml(pgnOpening.eco)}</span>`
+        + `<span class="pgn-opening-name">${escapeHtml(pgnOpening.name)}</span>`;
+    el.title = `${pgnOpening.eco} ${pgnOpening.name}`;
+}
 
 function uciToSan(fen, uci) {
     try {
@@ -2549,7 +2607,7 @@ function renderBoardSticker() {
     const changed = el.dataset.key !== key;
     el.dataset.key  = key;
     el.className    = `pgn-board-sticker mv-badge mv-${cls.key}`;
-    el.textContent  = MOVE_CLASS_SYMBOL[cls.key];
+    el.innerHTML    = MOVE_CLASS_SYMBOL[cls.key];
     el.title        = t(`groupDetail.moveClass.${cls.key}`);
     Object.assign(el.style, {
         width: `${size}px`, height: `${size}px`, minWidth: `${size}px`,
@@ -2567,6 +2625,9 @@ function renderEvalViews() {
     renderMoveEvalLine();
     renderBoardSticker();
     const marks = document.querySelectorAll('#pgn-move-list .mv-mark');
+    if (!moveEvalOn || sfFailed) {
+        document.querySelectorAll('#pgn-move-list .is-book').forEach(x => x.classList.remove('is-book'));
+    }
     const marksChanged = moveEvalOn && !sfFailed ? decorateMoveList() : (marks.forEach(x => x.remove()), marks.length > 0);
     if (marksChanged) keepActiveMoveVisible();
     document.getElementById('pgn-toggle-bar').setAttribute('aria-pressed', String(evalBarOn));
@@ -2580,6 +2641,7 @@ function decorateMoveList() {
     let changed = false;
     document.querySelectorAll('#pgn-move-list .pgn-move-san').forEach(span => {
         const cls  = classifyMove(parseInt(span.dataset.idx, 10));
+        span.classList.toggle('is-book', cls?.key === 'book');   // 이론수는 글자색만 바꾼다
         const key  = cls && MOVE_CLASS_MARKED.has(cls.key) ? cls.key : null;
         const mark = span.querySelector('.mv-mark');
         if (!key) {

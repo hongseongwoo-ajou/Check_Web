@@ -241,6 +241,7 @@
     "moveEvalPending": "Evaluating…",
     "moveEvalBest": "Best: {{move}}",
     "moveClass": {
+      "book": "Book",
       "brilliant": "Brilliant",
       "great": "Great",
       "best": "Best",

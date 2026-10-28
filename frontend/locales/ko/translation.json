@@ -241,6 +241,7 @@
     "moveEvalPending": "평가 계산 중…",
     "moveEvalBest": "최선: {{move}}",
     "moveClass": {
+      "book": "이론수",
       "brilliant": "탁월함",
       "great": "훌륭함",
       "best": "최선",

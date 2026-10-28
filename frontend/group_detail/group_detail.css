@@ -2316,10 +2316,47 @@
 :root[data-theme="dark"], :root:not([data-theme]) {
     --mv-brilliant: #26c2a3; --mv-great: #6fa0d0; --mv-best: #8fc45a; --mv-excellent: #8fc45a;
     --mv-good: #a7c48c; --mv-inaccuracy: #f2c94c; --mv-mistake: #f5a35c; --mv-blunder: #f0645a;
+    --mv-book: #c9a57a;
 }
 :root[data-theme="light"] {
     --mv-brilliant: #0f8a74; --mv-great: #3b6d9c; --mv-best: #4d7a22; --mv-excellent: #4d7a22;
     --mv-good: #5d7746; --mv-inaccuracy: #8a6a00; --mv-mistake: #b25d12; --mv-blunder: #c4362b;
+    --mv-book: #86603a;
+}
+
+/* 오프닝 이름 (Lichess 오프닝 목록 기준, 이름은 영어) */
+.pgn-opening {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+    font-size: 0.82rem;
+}
+
+.pgn-opening svg {
+    flex-shrink: 0;
+    color: var(--mv-book);
+}
+
+.pgn-opening-eco {
+    flex-shrink: 0;
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    background: rgba(var(--overlay-rgb), 0.08);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.pgn-opening-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pgn-move-san.is-book {
+    color: var(--mv-book);
 }
 
 .pgn-move-eval {
@@ -2366,6 +2403,7 @@
     color: #14141c;
 }
 
+.mv-book       { background: #a88865; }
 .mv-brilliant  { background: #26c2a3; }
 .mv-great      { background: #6fa0d0; }
 .mv-best       { background: #8fc45a; }
@@ -2375,6 +2413,7 @@
 .mv-mistake    { background: #f5a35c; }
 .mv-blunder    { background: #f0645a; }
 
+.mv-text-book       { color: var(--mv-book);       font-weight: 700; }
 .mv-text-brilliant  { color: var(--mv-brilliant);  font-weight: 700; }
 .mv-text-great      { color: var(--mv-great);      font-weight: 700; }
 .mv-text-best       { color: var(--mv-best);       font-weight: 700; }
