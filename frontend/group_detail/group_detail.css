@@ -2178,6 +2178,7 @@
 
 /* ===== 형세 평가 막대 (체스판 왼쪽) ===== */
 .pgn-board-row {
+    position: relative;   /* 체스판 수 평가 스티커 기준 */
     display: flex;
     align-items: stretch;
     gap: 6px;
@@ -2382,6 +2383,30 @@
 .mv-text-inaccuracy { color: var(--mv-inaccuracy); font-weight: 700; }
 .mv-text-mistake    { color: var(--mv-mistake);    font-weight: 700; }
 .mv-text-blunder    { color: var(--mv-blunder);    font-weight: 700; }
+
+/* 체스판 위 스티커 (크기·위치는 JS에서 칸 크기에 맞춰 설정) */
+.pgn-board-sticker {
+    position: absolute;
+    z-index: 5;
+    padding: 0;
+    pointer-events: none;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    line-height: 1;
+}
+
+.pgn-board-sticker.pop {
+    animation: pgn-sticker-pop 0.22s ease-out;
+}
+
+@keyframes pgn-sticker-pop {
+    from { transform: scale(0.4); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pgn-board-sticker.pop { animation: none; }
+}
 
 /* 수 목록 안의 작은 표시 (!!, ?, ??) */
 .mv-mark {

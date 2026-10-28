@@ -2460,28 +2460,81 @@ function renderMoveEvalLine() {
         ${progress}`;
 }
 
+// 체스판 스티커: 방금 둔 수가 도착한 칸의 오른쪽 위 모서리에 평가 배지를 붙인다.
+// 판을 돌리면 chessboard.js가 칸을 다시 그리므로 스티커는 판 바깥(.pgn-board-row)에 두고 위치만 계산한다.
+function renderBoardSticker() {
+    const row = document.querySelector('.pgn-board-row');
+    let el = document.getElementById('pgn-board-sticker');
+    if (!el) {
+        el = document.createElement('span');
+        el.id = 'pgn-board-sticker';
+        el.setAttribute('aria-hidden', 'true');
+        row.appendChild(el);
+    }
+    const i   = pgnMoveIndex;
+    const cls = moveEvalOn && !sfFailed && i > 0 ? classifyMove(i) : null;
+    const sq  = cls && document.querySelector(`#pgn-board [data-square="${pgnMovesVerbose[i - 1].to}"]`);
+    if (!cls || !sq) {
+        el.className = 'pgn-board-sticker hidden';
+        el.dataset.key = '';
+        return;
+    }
+    const rowR   = row.getBoundingClientRect();
+    const sqR    = sq.getBoundingClientRect();
+    const boardR = document.getElementById('pgn-board').getBoundingClientRect();
+    const size   = Math.round(Math.max(18, Math.min(30, sqR.width * 0.52)));
+    // 모서리에 걸치되 판 밖으로 나가지 않게 (h열·8단에서는 안쪽으로)
+    const left = Math.min(sqR.right - size * 0.7, boardR.right - size) - rowR.left;
+    const top  = Math.max(sqR.top - size * 0.3, boardR.top) - rowR.top;
+
+    const key = `${i}:${cls.key}`;
+    const changed = el.dataset.key !== key;
+    el.dataset.key  = key;
+    el.className    = `pgn-board-sticker mv-badge mv-${cls.key}`;
+    el.textContent  = MOVE_CLASS_SYMBOL[cls.key];
+    el.title        = t(`groupDetail.moveClass.${cls.key}`);
+    Object.assign(el.style, {
+        width: `${size}px`, height: `${size}px`, minWidth: `${size}px`,
+        left: `${left}px`, top: `${top}px`, fontSize: `${Math.round(size * 0.5)}px`,
+    });
+    if (changed) {                      // 새 수로 바뀔 때만 톡 튀어나오는 효과
+        el.classList.remove('pop');
+        void el.offsetWidth;
+        el.classList.add('pop');
+    }
+}
+
 function renderEvalViews() {
     renderEvalBar();
     renderMoveEvalLine();
-    if (moveEvalOn) decorateMoveList();
-    else document.querySelectorAll('#pgn-move-list .mv-mark').forEach(x => x.remove());
+    renderBoardSticker();
+    const marks = document.querySelectorAll('#pgn-move-list .mv-mark');
+    const marksChanged = moveEvalOn && !sfFailed ? decorateMoveList() : (marks.forEach(x => x.remove()), marks.length > 0);
+    if (marksChanged) keepActiveMoveVisible();
     document.getElementById('pgn-toggle-bar').setAttribute('aria-pressed', String(evalBarOn));
     document.getElementById('pgn-toggle-moves').setAttribute('aria-pressed', String(moveEvalOn));
     document.querySelector('.pgn-eval-toggles').classList.toggle('hidden', sfFailed);
 }
 
 // 수 목록의 각 수에 평가 표시(!!, ?, ?? …)를 붙인다. 목록을 다시 그리지 않고 표시만 갱신
+// 표시가 하나라도 바뀌었으면 true (줄바꿈이 달라질 수 있어 스크롤 위치를 다시 맞춰야 함)
 function decorateMoveList() {
+    let changed = false;
     document.querySelectorAll('#pgn-move-list .pgn-move-san').forEach(span => {
         const cls  = classifyMove(parseInt(span.dataset.idx, 10));
         const key  = cls && MOVE_CLASS_MARKED.has(cls.key) ? cls.key : null;
         const mark = span.querySelector('.mv-mark');
-        if (!key) { mark?.remove(); return; }
+        if (!key) {
+            if (mark) { mark.remove(); changed = true; }
+            return;
+        }
         if (mark?.dataset.key === key) return;
         mark?.remove();
         span.insertAdjacentHTML('beforeend',
             `<span class="mv-mark mv-text-${key}" data-key="${key}" title="${escapeHtml(t(`groupDetail.moveClass.${key}`))}">${MOVE_CLASS_SYMBOL[key]}</span>`);
+        changed = true;
     });
+    return changed;
 }
 
 document.getElementById('pgn-toggle-bar').addEventListener('click', () => {
@@ -2530,8 +2583,15 @@ function renderMoveList() {
         span.addEventListener('click', () => pgnGoTo(parseInt(span.dataset.idx)));
     });
 
-    // 현재 활성 수가 보이도록 수 목록 상자 안에서만 스크롤한다.
-    // scrollIntoView는 기보 창·페이지까지 함께 스크롤해 체스판이 밀려나므로 쓰지 않는다.
+    // 수 평가 표시(!!, ?? …)를 먼저 붙여 줄바꿈이 확정된 뒤에 스크롤 위치를 맞춘다
+    if (moveEvalOn && !sfFailed) decorateMoveList();
+    keepActiveMoveVisible();
+}
+
+// 현재 활성 수가 보이도록 수 목록 상자 안에서만 스크롤한다.
+// scrollIntoView는 기보 창·페이지까지 함께 스크롤해 체스판이 밀려나므로 쓰지 않는다.
+function keepActiveMoveVisible() {
+    const el = document.getElementById('pgn-move-list');
     const active = el.querySelector('.pgn-move-san.active');
     if (!active) {
         el.scrollTop = 0;   // 시작 국면(선택된 수 없음)이면 목록 맨 위로
@@ -2577,6 +2637,7 @@ document.getElementById('pgn-btn-last').addEventListener('click',  () => pgnGoTo
 document.getElementById('pgn-btn-flip').addEventListener('click', () => {
     if (pgnBoardInst) pgnBoardInst.orientation('flip');
     document.getElementById('pgn-eval-bar').classList.toggle('flipped');
+    renderBoardSticker();
     const topEl = document.getElementById('pgn-player-black');
     const botEl = document.getElementById('pgn-player-white');
     const tmp = topEl.textContent;
