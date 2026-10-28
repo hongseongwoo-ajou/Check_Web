@@ -233,6 +233,7 @@
     "pgnLast": "Last",
     "flipBoard": "Flip Board",
     "openInLichess": "Analyze on Lichess",
+    "evalDepth": "Depth {{depth}}",
     "evalBarTitle": "Evaluation (Stockfish) — more white means White is better",
     "toggleEvalBar": "Eval bar",
     "toggleMoveEval": "Move review",

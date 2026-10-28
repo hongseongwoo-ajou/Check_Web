@@ -2158,16 +2158,22 @@ function openPgnViewer(pgn, p1Name, p2Name) {
 //
 // 국면(FEN)마다 MultiPV 2로 분석해 캐시한다. 지금 보고 있는 국면을 먼저 보고(막대),
 // 수 평가가 켜져 있으면 나머지 국면을 기보 순서대로 이어서 분석한다.
+// 그게 다 끝나면 지금 보는 국면만 DEEP_DEPTH까지 더 깊게 본다 (막대에만 쓰고, 수 평가는 모든 수를 같은 깊이로 비교).
 // 수 평가는 "둔 쪽 승률이 최선의 수 대비 얼마나 떨어졌는지"로 매긴다.
 
 const ANALYSIS_DEPTH = 15;
+const DEEP_DEPTH     = 22;   // 브라우저 단일 스레드라 국면 하나에 수 초~수십 초 걸린다
 let sfWorker     = null;   // 처음 필요할 때 만든다 (엔진 파일 ≈7MB는 이때 한 번만 내려받음)
 let sfReady      = false;  // uciok → isready → readyok 까지 끝남
 let sfFailed     = false;  // Worker/WASM을 쓸 수 없는 환경이면 막대·수 평가를 숨긴다
 let sfSearching  = false;
 let sfStopping   = false;  // stop을 보냈고 bestmove를 기다리는 중 (이 탐색 결과는 미완성)
 let sfCurrentFen = null;   // 지금 탐색 중인 국면
-const evalCache  = {};     // fen → { cp | mate (백 기준, 최선 수순), best (UCI), second: {cp|mate} | null, depth, done }
+let sfDeep       = false;  // 지금 탐색이 깊은 분석(MultiPV 1, DEEP_DEPTH)인지
+let sfMultiPv    = 2;
+// fen → { cp | mate (백 기준, 최선 수순), best (UCI), second: {cp|mate} | null, depth, done,
+//         deep: { cp | mate, depth } (막대 전용 깊은 분석), deepDone }
+const evalCache  = {};
 
 let pgnMovesVerbose = [];  // chess.js verbose history (from/to/promotion) — 둔 수를 엔진 최선 수와 비교
 
@@ -2207,24 +2213,35 @@ function needsAnalysis(fen) {
     return fen && !gameOverResult(fen) && !evalCache[fen]?.done;
 }
 
-// 다음에 분석할 국면: 지금 보는 국면 → (수 평가가 켜져 있으면) 기보 앞에서부터 아직 안 본 국면
-function nextFenToAnalyze() {
+// 다음 분석: 지금 보는 국면 → (수 평가가 켜져 있으면) 기보 앞에서부터 아직 안 본 국면
+//           → (막대가 켜져 있으면) 지금 보는 국면을 깊게
+function nextAnalysis() {
     if (!pgnViewerOpen() || !(evalBarOn || moveEvalOn)) return null;
     const cur = pgnPositions[pgnMoveIndex];
-    if (needsAnalysis(cur)) return cur;
-    if (moveEvalOn) return pgnPositions.find(needsAnalysis) || null;
+    if (needsAnalysis(cur)) return { fen: cur, deep: false };
+    if (moveEvalOn) {
+        const fen = pgnPositions.find(needsAnalysis);
+        if (fen) return { fen, deep: false };
+    }
+    if (evalBarOn && cur && !gameOverResult(cur) && !evalCache[cur]?.deepDone) return { fen: cur, deep: true };
     return null;
 }
 
 function scheduleAnalysis() {
     if (!sfReady || sfSearching) return;
-    const fen = nextFenToAnalyze();
-    if (!fen) return;
-    sfCurrentFen = fen;
+    const next = nextAnalysis();
+    if (!next) return;
+    sfCurrentFen = next.fen;
+    sfDeep       = next.deep;
     sfSearching  = true;
     sfStopping   = false;
-    sfWorker.postMessage(`position fen ${fen}`);
-    sfWorker.postMessage(`go depth ${ANALYSIS_DEPTH}`);
+    const multiPv = next.deep ? 1 : 2;   // 깊은 분석은 두 번째 후보가 필요 없어 그만큼 빨라진다
+    if (multiPv !== sfMultiPv) {
+        sfWorker.postMessage(`setoption name MultiPV value ${multiPv}`);
+        sfMultiPv = multiPv;
+    }
+    sfWorker.postMessage(`position fen ${next.fen}`);
+    sfWorker.postMessage(`go depth ${next.deep ? DEEP_DEPTH : ANALYSIS_DEPTH}`);
 }
 
 // 화면 상태(수 이동·토글·창 열고 닫기)가 바뀌면 호출: 필요하면 진행 중 탐색을 멈추고 우선순위를 다시 정한다
@@ -2238,8 +2255,8 @@ function requestAnalysis() {
     if (!sfWorker) { initEngine(); return; }      // readyok 때 시작
     if (!sfReady) return;
     if (sfSearching) {
-        const want = nextFenToAnalyze();
-        if (want && want !== sfCurrentFen && !sfStopping) {
+        const want = nextAnalysis();
+        if ((!want || want.fen !== sfCurrentFen || want.deep !== sfDeep) && !sfStopping) {
             sfStopping = true;
             sfWorker.postMessage('stop');           // bestmove를 받으면 scheduleAnalysis가 이어서 시작
         }
@@ -2259,9 +2276,13 @@ function onEngineLine(line) {
     } else if (line.startsWith('bestmove')) {
         const entry = evalCache[sfCurrentFen];
         if (entry && !sfStopping) {
-            entry.done = true;
-            const bm = line.split(' ')[1];
-            if (bm && bm !== '(none)') entry.best = bm;
+            if (sfDeep) {
+                entry.deepDone = true;
+            } else {
+                entry.done = true;
+                const bm = line.split(' ')[1];
+                if (bm && bm !== '(none)') entry.best = bm;
+            }
         }
         sfSearching = false;
         sfStopping  = false;
@@ -2275,6 +2296,15 @@ function onEngineLine(line) {
         const sign  = sfCurrentFen.split(' ')[1] === 'w' ? 1 : -1;   // 엔진 점수는 둘 차례 기준 → 백 기준으로
         const score = { [m[2]]: sign * parseInt(m[3], 10) };
         const entry = evalCache[sfCurrentFen] || (evalCache[sfCurrentFen] = { second: null, depth: 0, done: false });
+        const depth = parseInt(m[1], 10);
+        if (sfDeep) {
+            // 중간에 멈췄다 다시 시작하면 얕은 깊이부터 다시 오므로, 이미 본 깊이를 넘을 때만 바꾼다
+            if (multipv === 1 && depth > (entry.deep?.depth || 0)) {
+                entry.deep = { ...score, depth };
+                if (sfCurrentFen === pgnPositions[pgnMoveIndex]) renderEvalBar();
+            }
+            return;
+        }
         if (multipv === 1) {
             delete entry.cp;
             delete entry.mate;
@@ -2392,7 +2422,15 @@ function uciOf(mv) {
 // 앞뒤 국면 분석이 끝나면 결과가 바뀌지 않으므로 기억해 둔다 (희생 판단의 교환 계산이 무거워서)
 const moveClassMemo = new Map();
 function classifyMove(i) {
-    if (i <= pgnBookPlies) return { key: 'book' };   // 이론수는 엔진 분석 없이 바로 표시
+    // 이론수는 엔진 분석 없이 바로 표시. 단 목록에 있어도 엔진이 실수·블런더로 보면 그쪽을 보여 준다 (바보 메이트 등)
+    if (i <= pgnBookPlies) {
+        const eng = engineMoveClass(i);
+        return eng && (eng.key === 'mistake' || eng.key === 'blunder') ? eng : { key: 'book' };
+    }
+    return engineMoveClass(i);
+}
+
+function engineMoveClass(i) {
     const key = `${pgnPositions[i - 1]}|${pgnPositions[i]}|${uciOf(pgnMovesVerbose[i - 1])}`;
     if (moveClassMemo.has(key)) return moveClassMemo.get(key);
     const result = computeMoveClass(i);
@@ -2508,14 +2546,30 @@ function uciToSan(fen, uci) {
     }
 }
 
+// 막대가 보여 주는 분석 깊이. 수 평가 줄이 보이면 그 오른쪽에, 아니면 아래 토글 옆에 쓴다
+// (깊은 분석 중에는 info 줄마다 바뀌므로 줄 전체를 다시 그리지 않고 글자만 바꾼다)
+function setEvalDepthText(text) {
+    document.querySelectorAll('.js-eval-depth').forEach(el => { el.textContent = text; });
+    document.getElementById('pgn-eval-depth').classList.toggle('hidden', moveEvalOn && !sfFailed);
+}
+
+// 막대에 쓸 평가: 깊은 분석이 기본 분석보다 더 깊게 갔으면 그 값
+function barEval(entry) {
+    if (!entry) return null;
+    return entry.deep && entry.deep.depth > entry.depth ? entry.deep : entry;
+}
+
 function renderEvalBar() {
     const bar = document.getElementById('pgn-eval-bar');
     bar.classList.toggle('hidden', sfFailed || !evalBarOn);
-    if (sfFailed || !evalBarOn) return;
+    if (sfFailed || !evalBarOn) {
+        setEvalDepthText('');
+        return;
+    }
 
     const fen     = pgnPositions[pgnMoveIndex];
     const over    = fen ? gameOverResult(fen) : null;
-    const ev      = fen ? evalCache[fen] : null;
+    const ev      = fen ? barEval(evalCache[fen]) : null;
     const hasEval = ev && ('cp' in ev || 'mate' in ev);
     const fill    = bar.querySelector('.pgn-eval-fill');
     const labelEl = bar.querySelector('.pgn-eval-label');
@@ -2535,6 +2589,8 @@ function renderEvalBar() {
     }
 
     bar.classList.toggle('is-loading', !over && !hasEval);
+    bar.title = `${t('groupDetail.evalBarTitle')}${hasEval && !over ? ` · ${t('groupDetail.evalDepth', { depth: ev.depth })}` : ''}`;
+    setEvalDepthText(hasEval && !over ? t('groupDetail.evalDepth', { depth: ev.depth }) : '');
     if (whitePct !== null) {     // 계산 중이면 막대는 직전 값 그대로 둔다
         fill.style.height = `${whitePct}%`;
         bar.classList.toggle('black-better', whitePct < 50);
@@ -2553,7 +2609,7 @@ function renderMoveEvalLine() {
     const done  = pgnPositions.filter(f => !gameOverResult(f) && evalCache[f]?.done).length;
     const progress = done < total
         ? `<span class="pgn-move-eval-progress">${escapeHtml(t('groupDetail.moveEvalAnalyzing', { done, total }))}</span>`
-        : '';
+        : `<span class="pgn-move-eval-progress js-eval-depth">${escapeHtml(document.getElementById('pgn-eval-depth').textContent)}</span>`;
 
     if (pgnMoveIndex === 0) {
         el.innerHTML = `<span class="pgn-move-eval-text muted">${escapeHtml(t('groupDetail.moveEvalStart'))}</span>${progress}`;

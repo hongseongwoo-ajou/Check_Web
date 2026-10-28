@@ -2423,6 +2423,14 @@
 .mv-text-mistake    { color: var(--mv-mistake);    font-weight: 700; }
 .mv-text-blunder    { color: var(--mv-blunder);    font-weight: 700; }
 
+/* 막대가 보여 주는 분석 깊이 (깊은 분석 중에는 계속 올라간다) */
+.pgn-eval-depth {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 /* 체스판 위 스티커 (크기·위치는 JS에서 칸 크기에 맞춰 설정) */
 .pgn-board-sticker {
     position: absolute;
@@ -2464,6 +2472,7 @@
 }
 
 .pgn-eval-toggles {
+    align-items: center;
     display: flex;
     gap: 0.4rem;
 }

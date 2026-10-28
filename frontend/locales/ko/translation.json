@@ -233,6 +233,7 @@
     "pgnLast": "끝으로",
     "flipBoard": "판 돌리기",
     "openInLichess": "Lichess에서 분석",
+    "evalDepth": "깊이 {{depth}}",
     "evalBarTitle": "형세 평가 (Stockfish) — 백이 유리할수록 흰색이 늘어납니다",
     "toggleEvalBar": "평가 막대",
     "toggleMoveEval": "수 평가",
