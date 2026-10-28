@@ -2175,9 +2175,17 @@ function renderMoveList() {
         span.addEventListener('click', () => pgnGoTo(parseInt(span.dataset.idx)));
     });
 
-    // 현재 활성 수가 보이도록 스크롤
+    // 현재 활성 수가 보이도록 수 목록 상자 안에서만 스크롤한다.
+    // scrollIntoView는 기보 창·페이지까지 함께 스크롤해 체스판이 밀려나므로 쓰지 않는다.
     const active = el.querySelector('.pgn-move-san.active');
-    if (active) active.scrollIntoView({ block: 'nearest' });
+    if (!active) {
+        el.scrollTop = 0;   // 시작 국면(선택된 수 없음)이면 목록 맨 위로
+    } else {
+        const box = el.getBoundingClientRect();
+        const r   = active.getBoundingClientRect();
+        if (r.top < box.top)            el.scrollTop -= box.top - r.top + 4;
+        else if (r.bottom > box.bottom) el.scrollTop += r.bottom - box.bottom + 4;
+    }
 }
 
 // Lichess 분석판 주소: 수순만 넘기므로 Lichess에 경기가 저장되지 않고, #ply로 현재 수에서 열린다
