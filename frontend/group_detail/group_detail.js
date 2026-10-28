@@ -2094,6 +2094,7 @@ function openPgnViewer(pgn, p1Name, p2Name) {
         const temp = new Chess();
         pgnPositions = [temp.fen()];
         pgnSans = history;
+        pgnMovesVerbose = chess.history({ verbose: true });
         history.forEach(san => {
             temp.move(san);
             pgnPositions.push(temp.fen());
@@ -2143,21 +2144,35 @@ function openPgnViewer(pgn, p1Name, p2Name) {
         });
         renderMoveList();
         updateViewerControls();
-        initEngine();
-        updateEval();
+        requestAnalysis();
     });
 }
 
-// ===== 형세 평가 막대 (Stockfish를 보는 사람의 브라우저 Web Worker에서 실행) =====
+// ===== 형세 평가 막대 · 수 평가 (Stockfish를 보는 사람의 브라우저 Web Worker에서 실행) =====
+//
+// 국면(FEN)마다 MultiPV 2로 분석해 캐시한다. 지금 보고 있는 국면을 먼저 보고(막대),
+// 수 평가가 켜져 있으면 나머지 국면을 기보 순서대로 이어서 분석한다.
+// 수 평가는 "둔 쪽 승률이 최선의 수 대비 얼마나 떨어졌는지"로 매긴다.
 
-const EVAL_DEPTH = 16;
-let sfWorker     = null;   // 처음 기보를 열 때 만든다 (엔진 파일 ≈7MB는 이때 한 번만 내려받음)
+const ANALYSIS_DEPTH = 15;
+let sfWorker     = null;   // 처음 필요할 때 만든다 (엔진 파일 ≈7MB는 이때 한 번만 내려받음)
 let sfReady      = false;  // uciok → isready → readyok 까지 끝남
-let sfFailed     = false;  // Worker/WASM을 쓸 수 없는 환경이면 막대를 숨긴다
+let sfFailed     = false;  // Worker/WASM을 쓸 수 없는 환경이면 막대·수 평가를 숨긴다
 let sfSearching  = false;
+let sfStopping   = false;  // stop을 보냈고 bestmove를 기다리는 중 (이 탐색 결과는 미완성)
 let sfCurrentFen = null;   // 지금 탐색 중인 국면
-let sfPendingFen = null;   // 지금 탐색을 멈춘 뒤 이어서 볼 국면
-const evalCache  = {};     // fen → { cp | mate (백 기준), depth }
+const evalCache  = {};     // fen → { cp | mate (백 기준, 최선 수순), best (UCI), second: {cp|mate} | null, depth, done }
+
+let pgnMovesVerbose = [];  // chess.js verbose history (from/to/promotion) — 둔 수를 엔진 최선 수와 비교
+
+function loadPref(key) {
+    try { return localStorage.getItem(key) !== 'off'; } catch { return true; }
+}
+function savePref(key, on) {
+    try { localStorage.setItem(key, on ? 'on' : 'off'); } catch { /* 저장 못 해도 이번 화면에선 동작 */ }
+}
+let evalBarOn  = loadPref('pgnEvalBar');
+let moveEvalOn = loadPref('pgnMoveEval');
 
 function initEngine() {
     if (sfWorker || sfFailed) return;
@@ -2166,98 +2181,244 @@ function initEngine() {
         sfWorker = new Worker('../vendor/stockfish/stockfish-18-lite-single.js');
     } catch {
         sfFailed = true;
-        renderEvalBar();
+        renderEvalViews();
         return;
     }
     sfWorker.onmessage = e => onEngineLine(String(e.data));
     sfWorker.onerror = () => {
         sfFailed = true;
         sfWorker = null;
-        renderEvalBar();
+        renderEvalViews();
     };
     sfWorker.postMessage('uci');
 }
 
-function startSearch() {
-    sfCurrentFen = sfPendingFen;
-    sfPendingFen = null;
+function pgnViewerOpen() {
+    return !document.getElementById('modal-pgn-viewer').classList.contains('hidden');
+}
+
+function needsAnalysis(fen) {
+    return fen && !gameOverResult(fen) && !evalCache[fen]?.done;
+}
+
+// 다음에 분석할 국면: 지금 보는 국면 → (수 평가가 켜져 있으면) 기보 앞에서부터 아직 안 본 국면
+function nextFenToAnalyze() {
+    if (!pgnViewerOpen() || !(evalBarOn || moveEvalOn)) return null;
+    const cur = pgnPositions[pgnMoveIndex];
+    if (needsAnalysis(cur)) return cur;
+    if (moveEvalOn) return pgnPositions.find(needsAnalysis) || null;
+    return null;
+}
+
+function scheduleAnalysis() {
+    if (!sfReady || sfSearching) return;
+    const fen = nextFenToAnalyze();
+    if (!fen) return;
+    sfCurrentFen = fen;
     sfSearching  = true;
-    sfWorker.postMessage(`position fen ${sfCurrentFen}`);
-    sfWorker.postMessage(`go depth ${EVAL_DEPTH}`);
+    sfStopping   = false;
+    sfWorker.postMessage(`position fen ${fen}`);
+    sfWorker.postMessage(`go depth ${ANALYSIS_DEPTH}`);
+}
+
+// 화면 상태(수 이동·토글·창 열고 닫기)가 바뀌면 호출: 필요하면 진행 중 탐색을 멈추고 우선순위를 다시 정한다
+function requestAnalysis() {
+    renderEvalViews();
+    if (sfFailed) return;
+    if (!pgnViewerOpen() || !(evalBarOn || moveEvalOn)) {
+        if (sfSearching && !sfStopping) { sfStopping = true; sfWorker.postMessage('stop'); }
+        return;
+    }
+    if (!sfWorker) { initEngine(); return; }      // readyok 때 시작
+    if (!sfReady) return;
+    if (sfSearching) {
+        const want = nextFenToAnalyze();
+        if (want && want !== sfCurrentFen && !sfStopping) {
+            sfStopping = true;
+            sfWorker.postMessage('stop');           // bestmove를 받으면 scheduleAnalysis가 이어서 시작
+        }
+        return;
+    }
+    scheduleAnalysis();
 }
 
 function onEngineLine(line) {
     if (line === 'uciok') {
         sfWorker.postMessage('setoption name Hash value 16');
+        sfWorker.postMessage('setoption name MultiPV value 2');
         sfWorker.postMessage('isready');
     } else if (line === 'readyok') {
         sfReady = true;
-        if (sfPendingFen) startSearch();
+        scheduleAnalysis();
     } else if (line.startsWith('bestmove')) {
+        const entry = evalCache[sfCurrentFen];
+        if (entry && !sfStopping) {
+            entry.done = true;
+            const bm = line.split(' ')[1];
+            if (bm && bm !== '(none)') entry.best = bm;
+        }
         sfSearching = false;
-        if (sfPendingFen) startSearch();
-    } else if (line.startsWith('info') && sfCurrentFen && !sfPendingFen) {
+        sfStopping  = false;
+        if (sfCurrentFen === pgnPositions[pgnMoveIndex] || moveEvalOn) renderEvalViews();
+        scheduleAnalysis();
+    } else if (line.startsWith('info') && sfCurrentFen) {
         // 경계값(lowerbound/upperbound)은 확정 점수가 아니므로 건너뛴다
         const m = line.match(/ depth (\d+) .*?score (cp|mate) (-?\d+)/);
         if (!m || / (lower|upper)bound/.test(line)) return;
-        const sign = sfCurrentFen.split(' ')[1] === 'w' ? 1 : -1;   // 엔진 점수는 둘 차례 기준 → 백 기준으로
-        const val  = sign * parseInt(m[3], 10);
-        evalCache[sfCurrentFen] = { [m[2]]: val, depth: parseInt(m[1], 10) };
-        if (sfCurrentFen === pgnPositions[pgnMoveIndex]) renderEvalBar();
+        const multipv = parseInt(line.match(/ multipv (\d+)/)?.[1] || '1', 10);
+        const sign  = sfCurrentFen.split(' ')[1] === 'w' ? 1 : -1;   // 엔진 점수는 둘 차례 기준 → 백 기준으로
+        const score = { [m[2]]: sign * parseInt(m[3], 10) };
+        const entry = evalCache[sfCurrentFen] || (evalCache[sfCurrentFen] = { second: null, depth: 0, done: false });
+        if (multipv === 1) {
+            delete entry.cp;
+            delete entry.mate;
+            Object.assign(entry, score);
+            entry.depth = parseInt(m[1], 10);
+            const pv = line.match(/ pv (\S+)/);
+            if (pv) entry.best = pv[1];
+        } else if (multipv === 2) {
+            entry.second = score;
+        }
+        if (multipv === 1 && sfCurrentFen === pgnPositions[pgnMoveIndex]) renderEvalBar();
     }
 }
 
-// 현재 국면 평가: 캐시가 충분히 깊으면 그대로, 아니면 엔진에 맡긴다(진행 중 탐색은 멈추고 교체)
-function updateEval() {
-    const fen = pgnPositions[pgnMoveIndex];
-    renderEvalBar();
-    if (!sfWorker || sfFailed || !fen || gameOverResult(fen)) return;
-    if (evalCache[fen]?.depth >= EVAL_DEPTH) return;
-    sfPendingFen = fen;
-    if (!sfReady) return;                    // readyok 때 시작
-    if (sfSearching) sfWorker.postMessage('stop');   // bestmove를 받으면 이어서 시작
-    else startSearch();
-}
-
 function stopEngine() {
-    sfPendingFen = null;
-    if (sfWorker && sfSearching) sfWorker.postMessage('stop');
+    if (sfWorker && sfSearching && !sfStopping) {
+        sfStopping = true;
+        sfWorker.postMessage('stop');
+    }
 }
 
-// 체크메이트·스테일메이트 등 끝난 국면은 엔진 없이 결과를 표시
+// 체크메이트·스테일메이트 등 끝난 국면은 엔진 없이 결과를 표시 (다시 그릴 때마다 여러 번 불리므로 기억해 둔다)
+const gameOverMemo = new Map();
 function gameOverResult(fen) {
+    if (gameOverMemo.has(fen)) return gameOverMemo.get(fen);
     const c = new Chess(fen);
-    if (c.in_checkmate()) return c.turn() === 'w' ? '0-1' : '1-0';
-    if (c.in_stalemate() || c.insufficient_material()) return '½';
-    return null;
+    let r = null;
+    if (c.in_checkmate()) r = c.turn() === 'w' ? '0-1' : '1-0';
+    else if (c.in_stalemate() || c.insufficient_material()) r = '½';
+    gameOverMemo.set(fen, r);
+    return r;
+}
+
+// Lichess와 같은 승률 곡선: 점수 → 백 승률(%)
+function whiteWinPct(score) {
+    if ('mate' in score) return score.mate > 0 ? 100 : 0;
+    return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * score.cp)) - 1);
+}
+
+// 국면의 백 승률. 끝난 국면은 결과로, 아직 분석이 안 끝났으면 null
+function positionWhitePct(fen) {
+    const over = gameOverResult(fen);
+    if (over) return over === '1-0' ? 100 : over === '0-1' ? 0 : 50;
+    const e = evalCache[fen];
+    return e?.done ? whiteWinPct(e) : null;
+}
+
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+// 백 기준 기물 점수 차
+function materialDiff(fen) {
+    let d = 0;
+    for (const ch of fen.split(' ')[0]) {
+        const v = PIECE_VALUE[ch.toLowerCase()];
+        if (v !== undefined) d += ch === ch.toUpperCase() ? v : -v;
+    }
+    return d;
+}
+
+function uciOf(mv) {
+    return mv.from + mv.to + (mv.promotion || '');
+}
+
+// i번째 수(1부터)의 평가. 앞뒤 국면 분석이 끝나야 매길 수 있고, 아니면 null
+//   brilliant !! · great ! · best · excellent · good · inaccuracy ?! · mistake ? · blunder ??
+function classifyMove(i) {
+    const before = pgnPositions[i - 1], after = pgnPositions[i];
+    const eb = evalCache[before];
+    if (!eb?.done) return null;
+    const afterWhite = positionWhitePct(after);
+    if (afterWhite === null) return null;
+
+    const white      = before.split(' ')[1] === 'w';
+    const mine       = pct => (white ? pct : 100 - pct);   // 둔 쪽 기준 승률
+    const bestPct    = mine(whiteWinPct(eb));
+    const afterPct   = mine(afterWhite);
+    const loss       = Math.max(0, bestPct - afterPct);
+    const played     = uciOf(pgnMovesVerbose[i - 1]);
+    const isBest     = played === eb.best;
+    const bestUci    = eb.best;
+
+    if (isBest || loss <= 2) {
+        // 기물 희생: 둔 뒤 상대의 최선 응수까지 보고 내 기물 점수가 2 이상 줄었는데도 형세가 괜찮다
+        const ea = evalCache[after];
+        if (ea?.best && afterPct >= 45 && bestPct < 97) {
+            const c = new Chess(after);
+            const reply = c.move({ from: ea.best.slice(0, 2), to: ea.best.slice(2, 4), promotion: ea.best[4] });
+            if (reply) {
+                const sign = white ? 1 : -1;
+                const lost = sign * (materialDiff(before) - materialDiff(c.fen()));
+                if (lost >= 2 && !pgnMovesVerbose[i - 1].promotion) return { key: 'brilliant', bestUci };
+            }
+        }
+        // 유일하게 좋은 수: 두 번째 후보와 승률 차이가 크다
+        if (isBest && eb.second) {
+            const gap = bestPct - mine(whiteWinPct(eb.second));
+            if (gap >= 15 && bestPct < 97) return { key: 'great', bestUci };
+        }
+        if (isBest)    return { key: 'best', bestUci };
+        return { key: 'excellent', bestUci };
+    }
+    if (loss <= 5)  return { key: 'good', bestUci };
+    if (loss <= 10) return { key: 'inaccuracy', bestUci };
+    if (loss <= 20) return { key: 'mistake', bestUci };
+    return { key: 'blunder', bestUci };
+}
+
+const MOVE_CLASS_SYMBOL = {
+    brilliant: '!!', great: '!', best: '★', excellent: '✓', good: '✓',
+    inaccuracy: '?!', mistake: '?', blunder: '??',
+};
+// 수 목록에 표시를 붙이는 평가 (나머지는 판 아래 한 줄에서만 보여준다)
+const MOVE_CLASS_MARKED = new Set(['brilliant', 'great', 'inaccuracy', 'mistake', 'blunder']);
+
+function uciToSan(fen, uci) {
+    try {
+        const c = new Chess(fen);
+        const mv = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+        return mv ? mv.san : uci;
+    } catch {
+        return uci;
+    }
 }
 
 function renderEvalBar() {
     const bar = document.getElementById('pgn-eval-bar');
-    bar.classList.toggle('hidden', sfFailed);
-    if (sfFailed) return;
+    bar.classList.toggle('hidden', sfFailed || !evalBarOn);
+    if (sfFailed || !evalBarOn) return;
 
-    const fen    = pgnPositions[pgnMoveIndex];
-    const over   = fen ? gameOverResult(fen) : null;
-    const ev     = fen ? evalCache[fen] : null;
-    const fill   = bar.querySelector('.pgn-eval-fill');
+    const fen     = pgnPositions[pgnMoveIndex];
+    const over    = fen ? gameOverResult(fen) : null;
+    const ev      = fen ? evalCache[fen] : null;
+    const hasEval = ev && ('cp' in ev || 'mate' in ev);
+    const fill    = bar.querySelector('.pgn-eval-fill');
     const labelEl = bar.querySelector('.pgn-eval-label');
     let whitePct = null, label = '…';
 
     if (over) {
         whitePct = over === '1-0' ? 100 : over === '0-1' ? 0 : 50;
         label = over;
-    } else if (ev && 'mate' in ev) {
-        whitePct = ev.mate > 0 ? 100 : 0;
-        label = `M${Math.abs(ev.mate)}`;
-    } else if (ev) {
-        // Lichess와 같은 승률 곡선: 점수(센티폰) → 백 몫(%)
-        whitePct = 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * ev.cp)) - 1);
-        const pawns = Math.abs(ev.cp) / 100;
-        label = pawns >= 10 ? pawns.toFixed(0) : pawns.toFixed(1);
+    } else if (hasEval) {
+        whitePct = whiteWinPct(ev);
+        if ('mate' in ev) {
+            label = `M${Math.abs(ev.mate)}`;
+        } else {
+            const pawns = Math.abs(ev.cp) / 100;
+            label = pawns >= 10 ? pawns.toFixed(0) : pawns.toFixed(1);
+        }
     }
 
-    bar.classList.toggle('is-loading', !over && !ev);
+    bar.classList.toggle('is-loading', !over && !hasEval);
     if (whitePct !== null) {     // 계산 중이면 막대는 직전 값 그대로 둔다
         fill.style.height = `${whitePct}%`;
         bar.classList.toggle('black-better', whitePct < 50);
@@ -2265,9 +2426,78 @@ function renderEvalBar() {
     labelEl.textContent = label;
 }
 
+// 판 아래 한 줄: 지금 수의 평가와 최선의 수
+function renderMoveEvalLine() {
+    const el = document.getElementById('pgn-move-eval');
+    const show = moveEvalOn && !sfFailed && pgnSans.length > 0;
+    el.classList.toggle('hidden', !show);
+    if (!show) return;
+
+    const total = pgnPositions.filter(f => !gameOverResult(f)).length;
+    const done  = pgnPositions.filter(f => !gameOverResult(f) && evalCache[f]?.done).length;
+    const progress = done < total
+        ? `<span class="pgn-move-eval-progress">${escapeHtml(t('groupDetail.moveEvalAnalyzing', { done, total }))}</span>`
+        : '';
+
+    if (pgnMoveIndex === 0) {
+        el.innerHTML = `<span class="pgn-move-eval-text muted">${escapeHtml(t('groupDetail.moveEvalStart'))}</span>${progress}`;
+        return;
+    }
+    const i   = pgnMoveIndex;
+    const cls = classifyMove(i);
+    const num = `${Math.ceil(i / 2)}.${i % 2 === 0 ? '..' : ''}`;
+    const san = escapeHtml(`${num} ${pgnSans[i - 1]}`);
+    if (!cls) {
+        el.innerHTML = `<span class="pgn-move-eval-text muted">${san} — ${escapeHtml(t('groupDetail.moveEvalPending'))}</span>${progress}`;
+        return;
+    }
+    const showBest = !['brilliant', 'great', 'best'].includes(cls.key) && cls.bestUci;
+    const bestSan  = showBest ? uciToSan(pgnPositions[i - 1], cls.bestUci) : '';
+    el.innerHTML = `
+        <span class="mv-badge mv-${cls.key}" aria-hidden="true">${MOVE_CLASS_SYMBOL[cls.key]}</span>
+        <span class="pgn-move-eval-text"><strong>${san}</strong> · <span class="mv-text-${cls.key}">${escapeHtml(t(`groupDetail.moveClass.${cls.key}`))}</span>${
+            showBest ? ` <span class="muted">· ${escapeHtml(t('groupDetail.moveEvalBest', { move: bestSan }))}</span>` : ''}</span>
+        ${progress}`;
+}
+
+function renderEvalViews() {
+    renderEvalBar();
+    renderMoveEvalLine();
+    if (moveEvalOn) decorateMoveList();
+    else document.querySelectorAll('#pgn-move-list .mv-mark').forEach(x => x.remove());
+    document.getElementById('pgn-toggle-bar').setAttribute('aria-pressed', String(evalBarOn));
+    document.getElementById('pgn-toggle-moves').setAttribute('aria-pressed', String(moveEvalOn));
+    document.querySelector('.pgn-eval-toggles').classList.toggle('hidden', sfFailed);
+}
+
+// 수 목록의 각 수에 평가 표시(!!, ?, ?? …)를 붙인다. 목록을 다시 그리지 않고 표시만 갱신
+function decorateMoveList() {
+    document.querySelectorAll('#pgn-move-list .pgn-move-san').forEach(span => {
+        const cls  = classifyMove(parseInt(span.dataset.idx, 10));
+        const key  = cls && MOVE_CLASS_MARKED.has(cls.key) ? cls.key : null;
+        const mark = span.querySelector('.mv-mark');
+        if (!key) { mark?.remove(); return; }
+        if (mark?.dataset.key === key) return;
+        mark?.remove();
+        span.insertAdjacentHTML('beforeend',
+            `<span class="mv-mark mv-text-${key}" data-key="${key}" title="${escapeHtml(t(`groupDetail.moveClass.${key}`))}">${MOVE_CLASS_SYMBOL[key]}</span>`);
+    });
+}
+
+document.getElementById('pgn-toggle-bar').addEventListener('click', () => {
+    evalBarOn = !evalBarOn;
+    savePref('pgnEvalBar', evalBarOn);
+    requestAnalysis();
+});
+document.getElementById('pgn-toggle-moves').addEventListener('click', () => {
+    moveEvalOn = !moveEvalOn;
+    savePref('pgnMoveEval', moveEvalOn);
+    requestAnalysis();
+});
+
 // 기보 창을 닫으면 탐색을 멈춘다 (닫는 경로가 여러 곳이라 클래스 변화를 지켜본다)
 new MutationObserver(() => {
-    if (document.getElementById('modal-pgn-viewer').classList.contains('hidden')) stopEngine();
+    if (!pgnViewerOpen()) stopEngine();
 }).observe(document.getElementById('modal-pgn-viewer'), { attributes: true, attributeFilter: ['class'] });
 
 function renderMoveList() {
@@ -2337,7 +2567,7 @@ function pgnGoTo(index) {
     if (pgnBoardInst) pgnBoardInst.position(pgnPositions[pgnMoveIndex], false);
     renderMoveList();
     updateViewerControls();
-    updateEval();
+    requestAnalysis();
 }
 
 document.getElementById('pgn-btn-first').addEventListener('click', () => pgnGoTo(0));

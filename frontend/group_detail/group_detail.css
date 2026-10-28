@@ -2310,8 +2310,140 @@
 }
 
 /* ===== 수 목록 ===== */
+/* ===== 수 평가 ===== */
+/* 평가별 색 (체스 사이트에서 흔히 쓰는 색). 글자로 쓸 때 밝은 테마에서는 대비를 위해 더 진하게 */
+:root[data-theme="dark"], :root:not([data-theme]) {
+    --mv-brilliant: #26c2a3; --mv-great: #6fa0d0; --mv-best: #8fc45a; --mv-excellent: #8fc45a;
+    --mv-good: #a7c48c; --mv-inaccuracy: #f2c94c; --mv-mistake: #f5a35c; --mv-blunder: #f0645a;
+}
+:root[data-theme="light"] {
+    --mv-brilliant: #0f8a74; --mv-great: #3b6d9c; --mv-best: #4d7a22; --mv-excellent: #4d7a22;
+    --mv-good: #5d7746; --mv-inaccuracy: #8a6a00; --mv-mistake: #b25d12; --mv-blunder: #c4362b;
+}
+
+.pgn-move-eval {
+    width: 100%;
+    min-height: 2.1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg);
+    font-size: 0.82rem;
+}
+
+.pgn-move-eval-text {
+    min-width: 0;
+}
+
+.pgn-move-eval .muted {
+    color: var(--color-text-muted);
+}
+
+.pgn-move-eval-progress {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+/* 판 아래 줄의 동그란 배지: 배경은 평가 색, 글자는 어두운 색 고정 */
+.mv-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.2rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #14141c;
+}
+
+.mv-brilliant  { background: #26c2a3; }
+.mv-great      { background: #6fa0d0; }
+.mv-best       { background: #8fc45a; }
+.mv-excellent  { background: #8fc45a; }
+.mv-good       { background: #a7c48c; }
+.mv-inaccuracy { background: #f2c94c; }
+.mv-mistake    { background: #f5a35c; }
+.mv-blunder    { background: #f0645a; }
+
+.mv-text-brilliant  { color: var(--mv-brilliant);  font-weight: 700; }
+.mv-text-great      { color: var(--mv-great);      font-weight: 700; }
+.mv-text-best       { color: var(--mv-best);       font-weight: 700; }
+.mv-text-excellent  { color: var(--mv-excellent);  font-weight: 700; }
+.mv-text-good       { color: var(--mv-good);       font-weight: 700; }
+.mv-text-inaccuracy { color: var(--mv-inaccuracy); font-weight: 700; }
+.mv-text-mistake    { color: var(--mv-mistake);    font-weight: 700; }
+.mv-text-blunder    { color: var(--mv-blunder);    font-weight: 700; }
+
+/* 수 목록 안의 작은 표시 (!!, ?, ??) */
+.mv-mark {
+    margin-left: 0.1rem;
+    font-size: 0.75em;
+}
+
+/* ===== 기보 창 아래: 켜고 끄기 + Lichess ===== */
+.pgn-viewer-footer {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.pgn-eval-toggles {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.pgn-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+/* 켜짐/꺼짐 점 */
+.pgn-toggle::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+}
+
+.pgn-toggle[aria-pressed="true"] {
+    border-color: var(--color-primary);
+    background: rgba(var(--color-primary-rgb), 0.12);
+    color: var(--color-primary);
+}
+
+.pgn-toggle[aria-pressed="true"]::before {
+    background: currentColor;
+}
+
+.pgn-toggle:hover {
+    border-color: var(--color-primary);
+}
+
 .pgn-lichess-link {
-    align-self: flex-end;
+    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;

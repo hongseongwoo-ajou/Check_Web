@@ -311,11 +311,18 @@
                     <span class="pgn-controls-divider"></span>
                     <button id="pgn-btn-flip"  class="pgn-nav-btn pgn-btn-flip" title="판 돌리기" data-i18n-title="groupDetail.flipBoard">&#8645;</button>
                 </div>
+                <div id="pgn-move-eval" class="pgn-move-eval hidden" aria-live="polite"></div>
                 <div id="pgn-move-list" class="pgn-move-list"></div>
-                <a id="pgn-btn-lichess" class="pgn-lichess-link hidden" href="#" target="_blank" rel="noopener"
-                   title="현재 수부터 Lichess 분석판에서 엔진으로 분석합니다 (새 탭)" data-i18n-title="groupDetail.openInLichessHint">
-                    <span data-i18n="groupDetail.openInLichess">Lichess에서 분석</span> <span aria-hidden="true">&#8599;</span>
-                </a>
+                <div class="pgn-viewer-footer">
+                    <div class="pgn-eval-toggles">
+                        <button type="button" id="pgn-toggle-bar" class="pgn-toggle" aria-pressed="true" data-i18n="groupDetail.toggleEvalBar">평가 막대</button>
+                        <button type="button" id="pgn-toggle-moves" class="pgn-toggle" aria-pressed="true" data-i18n="groupDetail.toggleMoveEval">수 평가</button>
+                    </div>
+                    <a id="pgn-btn-lichess" class="pgn-lichess-link hidden" href="#" target="_blank" rel="noopener"
+                       title="현재 수부터 Lichess 분석판에서 엔진으로 분석합니다 (새 탭)" data-i18n-title="groupDetail.openInLichessHint">
+                        <span data-i18n="groupDetail.openInLichess">Lichess에서 분석</span> <span aria-hidden="true">&#8599;</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

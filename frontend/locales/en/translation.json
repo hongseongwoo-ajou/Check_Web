@@ -234,6 +234,22 @@
     "flipBoard": "Flip Board",
     "openInLichess": "Analyze on Lichess",
     "evalBarTitle": "Evaluation (Stockfish) — more white means White is better",
+    "toggleEvalBar": "Eval bar",
+    "toggleMoveEval": "Move review",
+    "moveEvalAnalyzing": "Analyzing {{done}}/{{total}}",
+    "moveEvalStart": "Starting position",
+    "moveEvalPending": "Evaluating…",
+    "moveEvalBest": "Best: {{move}}",
+    "moveClass": {
+      "brilliant": "Brilliant",
+      "great": "Great",
+      "best": "Best",
+      "excellent": "Excellent",
+      "good": "Good",
+      "inaccuracy": "Inaccuracy",
+      "mistake": "Mistake",
+      "blunder": "Blunder"
+    },
     "openInLichessHint": "Open the Lichess analysis board with the engine at the current move (new tab)",
     "action": {
       "pollClose": "Poll Closed",
