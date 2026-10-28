@@ -2618,3 +2618,83 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ===== 그룹 나가기 버튼 (방장 외) ===== */
+.btn-leave-group {
+    padding: 0.38rem 0.85rem;
+    background: transparent;
+    border: 1px solid rgba(var(--color-danger-rgb), 0.4);
+    border-radius: var(--radius);
+    color: var(--color-danger);
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-leave-group:hover {
+    background: rgba(var(--color-danger-rgb), 0.08);
+    border-color: var(--color-danger);
+}
+
+/* ===== 공지 수정 버튼 ===== */
+.btn-edit-announcement {
+    padding: 0.15rem 0.5rem;
+    background: rgba(var(--color-primary-rgb), 0.12);
+    border: none;
+    border-radius: 3px;
+    color: var(--color-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ===== 그룹 설정: 그룹 정보 ===== */
+.gs-field-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0.5rem 0 0.35rem;
+}
+
+.gs-inline-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.gs-inline-row .form-input { flex: 1; min-width: 0; }
+.gs-inline-row .invite-code { flex: 1; font-size: 0.95rem; letter-spacing: 0.08em; }
+
+.btn-gs-action {
+    padding: 0.45rem 0.85rem;
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius);
+    color: var(--color-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-gs-action:hover    { background: rgba(var(--color-primary-rgb), 0.1); }
+.btn-gs-action:disabled { opacity: 0.5; cursor: default; }
+
+/* ===== 더보기 버튼 (최근 경기, 활동 기록) ===== */
+.btn-load-more {
+    display: block;
+    width: 100%;
+    margin-top: 0.75rem;
+    padding: 0.55rem;
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.btn-load-more:hover    { color: var(--color-primary); border-color: var(--color-primary); }
+.btn-load-more:disabled { opacity: 0.6; cursor: default; }

@@ -249,7 +249,11 @@
       "folderAssign": "친선 경기 폴더 담기",
       "folderRemove": "친선 경기 폴더 빼기",
       "memberKick": "멤버 강퇴",
-      "roleChange": "역할 변경"
+      "roleChange": "역할 변경",
+      "memberLeave": "멤버 탈퇴",
+      "ownerTransfer": "방장 위임",
+      "groupRename": "그룹 이름 변경",
+      "inviteRegen": "초대 코드 재발급"
     },
     "addMatchButton": "+ 경기 추가",
     "addMatchTitle": "경기 추가",
@@ -360,6 +364,18 @@
     "viewAll": "전체보기",
     "whiteShort": "백",
     "winParen": "{{name}} 승 ({{color}})",
-    "winnerAnnounce": "{{name}} 승"
+    "winnerAnnounce": "{{name}} 승",
+    "leaveGroup": "그룹 나가기",
+    "confirmLeaveGroup": "'{{name}}' 그룹에서 나가시겠습니까? 다시 들어오려면 초대 코드가 필요합니다.",
+    "loadMore": "더보기",
+    "editAnnouncementTitle": "공지 수정",
+    "transferOwner": "방장 넘기기",
+    "confirmTransferOwner": "{{name}}님에게 방장을 넘기시겠습니까? 넘긴 뒤에는 임원이 되며, 되돌리려면 새 방장이 다시 넘겨줘야 합니다.",
+    "ownerTransferred": "{{name}}님이 새 방장이 되었습니다.",
+    "groupInfoHeading": "그룹 정보",
+    "regenerateInvite": "재발급",
+    "confirmRegenerateInvite": "새 초대 코드를 발급할까요? 이전 코드로는 더 이상 가입할 수 없습니다.",
+    "inviteRegenerated": "새 초대 코드가 발급되었습니다.",
+    "groupRenamed": "그룹 이름이 변경되었습니다."
   }
 }

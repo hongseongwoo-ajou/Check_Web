@@ -700,6 +700,14 @@ class UpdateMemberRoleRequest(BaseModel):
     role: str  # '임원' or '회원'
 
 
+class TransferOwnerRequest(BaseModel):
+    member_id: int
+
+
+class RenameGroupRequest(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=50)]
+
+
 class CreateAnnouncementRequest(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     content: str = Field(min_length=1, max_length=2000)
@@ -1164,14 +1172,110 @@ def kick_member(group_id: int, member_id: int, user=Depends(get_current_user)):
             "SELECT nickname FROM users WHERE id = ?", (member_id,)
         ).fetchone()
         target_nick = target_user["nickname"] if target_user else f"#{member_id}"
-        conn.execute(
-            "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
-            (member_id, group_id),
-        )
+        _remove_member(conn, group_id, member_id)
         _log(conn, group_id, user["id"], "멤버_강퇴", f"{target_nick}님 강퇴")
         conn.commit()
 
     return {"message": "멤버가 강퇴되었습니다."}
+
+
+def _remove_member(conn, group_id: int, user_id: int):
+    """그룹에서 멤버를 뺀다. 아직 투표 중인 투표의 참여 기록도 함께 지워
+    (나간 사람이 참여자 명단에 남거나 인원 수에 잡히지 않도록). 지난 경기 기록은 남긴다."""
+    conn.execute(
+        """DELETE FROM poll_votes
+           WHERE user_id = ? AND poll_id IN (
+               SELECT id FROM polls WHERE group_id = ? AND status = 'voting')""",
+        (user_id, group_id),
+    )
+    conn.execute(
+        "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
+        (user_id, group_id),
+    )
+
+
+@app.post("/api/groups/{group_id}/leave")
+def leave_group(group_id: int, user=Depends(get_current_user)):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+        if row["role"] == "방장":
+            raise HTTPException(status_code=400, detail="방장은 그룹을 나갈 수 없습니다. 먼저 다른 멤버에게 방장을 넘겨주세요.")
+
+        _remove_member(conn, group_id, user["id"])
+        _log(conn, group_id, user["id"], "멤버_탈퇴", f"{user['nickname']}님 탈퇴")
+        conn.commit()
+
+    return {"message": "그룹에서 나갔습니다."}
+
+
+@app.post("/api/groups/{group_id}/transfer-owner")
+def transfer_owner(group_id: int, req: TransferOwnerRequest, user=Depends(get_current_user)):
+    """방장 권한을 다른 멤버에게 넘긴다. 기존 방장은 임원이 된다."""
+    with get_db() as conn:
+        my_row = conn.execute(
+            "SELECT role FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user["id"], group_id),
+        ).fetchone()
+        if not my_row:
+            raise HTTPException(status_code=403, detail="해당 그룹의 멤버가 아닙니다.")
+        if my_row["role"] != "방장":
+            raise HTTPException(status_code=403, detail="방장만 방장을 넘길 수 있습니다.")
+        if req.member_id == user["id"]:
+            raise HTTPException(status_code=400, detail="자신에게는 방장을 넘길 수 없습니다.")
+
+        target = conn.execute(
+            """SELECT u.nickname FROM user_groups ug JOIN users u ON u.id = ug.user_id
+               WHERE ug.user_id = ? AND ug.group_id = ?""",
+            (req.member_id, group_id),
+        ).fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="해당 멤버를 찾을 수 없습니다.")
+
+        conn.execute("UPDATE user_groups SET role = '방장' WHERE user_id = ? AND group_id = ?",
+                     (req.member_id, group_id))
+        conn.execute("UPDATE user_groups SET role = '임원' WHERE user_id = ? AND group_id = ?",
+                     (user["id"], group_id))
+        conn.execute("UPDATE groups SET owner_id = ? WHERE id = ?", (req.member_id, group_id))
+        _log(conn, group_id, user["id"], "방장_위임", f"{target['nickname']}님에게 방장 위임")
+        conn.commit()
+
+    return {"message": "방장을 넘겼습니다."}
+
+
+@app.patch("/api/groups/{group_id}")
+def rename_group(group_id: int, req: RenameGroupRequest, user=Depends(get_current_user)):
+    with get_db() as conn:
+        _check_admin(conn, user["id"], group_id)
+        group = conn.execute("SELECT name FROM groups WHERE id = ?", (group_id,)).fetchone()
+        if not group:
+            raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다.")
+        if group["name"] != req.name:
+            conn.execute("UPDATE groups SET name = ? WHERE id = ?", (req.name, group_id))
+            _log(conn, group_id, user["id"], "그룹_이름변경", f"'{group['name']}' → '{req.name}'")
+        conn.commit()
+
+    return {"name": req.name}
+
+
+@app.post("/api/groups/{group_id}/invite-code")
+def regenerate_invite_code(group_id: int, user=Depends(get_current_user)):
+    """초대 코드를 새로 발급한다. 이전 코드로는 더 이상 가입할 수 없다."""
+    with get_db() as conn:
+        _check_admin(conn, user["id"], group_id)
+        for _ in range(5):   # 드물게 다른 그룹 코드와 겹치면 다시 생성
+            code = secrets.token_hex(4).upper()
+            if not conn.execute("SELECT 1 FROM groups WHERE invite_code = ?", (code,)).fetchone():
+                break
+        conn.execute("UPDATE groups SET invite_code = ? WHERE id = ?", (code, group_id))
+        _log(conn, group_id, user["id"], "초대코드_재발급", "초대 코드 재발급")
+        conn.commit()
+
+    return {"invite_code": code}
 
 
 # ---------- 그룹 멤버 ----------
@@ -1340,6 +1444,29 @@ def create_announcement(group_id: int, req: CreateAnnouncementRequest, user=Depe
     return {"id": announcement_id, "title": title, "content": content}
 
 
+@app.put("/api/announcements/{announcement_id}")
+def update_announcement(announcement_id: int, req: CreateAnnouncementRequest, user=Depends(get_current_user)):
+    title   = req.title.strip()
+    content = req.content.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="제목을 입력해주세요.")
+    if not content:
+        raise HTTPException(status_code=400, detail="내용을 입력해주세요.")
+
+    with get_db() as conn:
+        ann = conn.execute("SELECT group_id FROM announcements WHERE id = ?", (announcement_id,)).fetchone()
+        if not ann:
+            raise HTTPException(status_code=404, detail="공지사항을 찾을 수 없습니다.")
+        _check_admin(conn, user["id"], ann["group_id"])
+        conn.execute(
+            "UPDATE announcements SET title = ?, content = ? WHERE id = ?",
+            (title, content, announcement_id),
+        )
+        conn.commit()
+
+    return {"id": announcement_id, "title": title, "content": content}
+
+
 @app.delete("/api/announcements/{announcement_id}")
 def delete_announcement(announcement_id: int, user=Depends(get_current_user)):
     with get_db() as conn:
@@ -1356,7 +1483,10 @@ def delete_announcement(announcement_id: int, user=Depends(get_current_user)):
 # ---------- 매치 ----------
 
 @app.get("/api/groups/{group_id}/matches")
-def get_group_matches(group_id: int, user=Depends(get_current_user)):
+def get_group_matches(group_id: int, offset: int = 0, limit: int = 30, user=Depends(get_current_user)):
+    """완료된 경기를 최신순으로 limit개씩 반환 (offset으로 '더보기')."""
+    offset = max(0, offset)
+    limit  = min(max(1, limit), 100)
     with get_db() as conn:
         if not conn.execute(
             "SELECT 1 FROM user_groups WHERE user_id = ? AND group_id = ?",
@@ -1375,9 +1505,9 @@ def get_group_matches(group_id: int, user=Depends(get_current_user)):
                JOIN users p2 ON m.player2_id = p2.id
                LEFT JOIN users w ON m.winner_id = w.id
                WHERE m.group_id = ? AND m.status = 'finished'
-               ORDER BY m.played_at DESC
-               LIMIT 30""",
-            (group_id,),
+               ORDER BY m.played_at DESC, m.id DESC   -- 같은 시각 경기도 페이지 사이에서 빠지거나 겹치지 않게
+               LIMIT ? OFFSET ?""",
+            (group_id, limit, offset),
         ).fetchall()
 
     return [dict(m) for m in matches]
@@ -2368,7 +2498,8 @@ VALID_LOG_ACTIONS = {
     "경기_결과기록", "경기_결과수정", "경기_수정", "경기_추가", "경기_삭제",
     "친선경기_기록", "친선경기_폴더담기", "친선경기_폴더빼기",
     "폴더_생성", "폴더_수정", "폴더_삭제",
-    "멤버_강퇴", "역할_변경",
+    "멤버_강퇴", "멤버_탈퇴", "역할_변경", "방장_위임",
+    "그룹_이름변경", "초대코드_재발급",
 }
 
 @app.get("/api/groups/{group_id}/activity-logs")
@@ -2376,32 +2507,26 @@ def get_activity_logs(
     group_id: int,
     action: str = None,
     limit: int = 50,
+    offset: int = 0,
     user=Depends(get_current_user),
 ):
     if action and action not in VALID_LOG_ACTIONS:
         raise HTTPException(status_code=400, detail="유효하지 않은 활동 유형입니다.")
+    offset = max(0, offset)
+    limit  = min(max(1, limit), 100)
     with get_db() as conn:
         _check_admin(conn, user["id"], group_id)
-        if action:
-            rows = conn.execute(
-                """SELECT al.id, al.action, al.detail, al.created_at,
-                          u.nickname AS actor
-                   FROM activity_logs al
-                   JOIN users u ON al.user_id = u.id
-                   WHERE al.group_id = ? AND al.action = ?
-                   ORDER BY al.created_at DESC LIMIT ?""",
-                (group_id, action, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT al.id, al.action, al.detail, al.created_at,
-                          u.nickname AS actor
-                   FROM activity_logs al
-                   JOIN users u ON al.user_id = u.id
-                   WHERE al.group_id = ?
-                   ORDER BY al.created_at DESC LIMIT ?""",
-                (group_id, limit),
-            ).fetchall()
+        action_sql = " AND al.action = ?" if action else ""
+        params = (group_id, action, limit, offset) if action else (group_id, limit, offset)
+        rows = conn.execute(
+            f"""SELECT al.id, al.action, al.detail, al.created_at,
+                       u.nickname AS actor
+                FROM activity_logs al
+                JOIN users u ON al.user_id = u.id
+                WHERE al.group_id = ?{action_sql}
+                ORDER BY al.created_at DESC, al.id DESC LIMIT ? OFFSET ?""",
+            params,
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

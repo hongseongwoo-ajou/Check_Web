@@ -19,6 +19,7 @@ if (!groupId || isNaN(groupId)) window.location.href = '../lobby/lobby.html';
 let currentMembers   = [];
 let currentRole      = '회원';
 let cachedSettings   = { pts_win: 3, pts_draw: 2, pts_loss: 1, is_color_automatic: true };
+let currentGroup     = null;   // { id, name, invite_code, ... } — refreshPage에서 채움
 let historyPage      = 1;
 let openPollId       = null;
 let pollMatchCache   = {};
@@ -338,12 +339,17 @@ function renderMembers(members) {
             ? `<button type="button" class="match-menu-item btn-kick" role="menuitem" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}">${t('groupDetail.kick')}</button>`
             : '';
 
+        // 방장만: 방장 넘기기
+        const transferItem = (isOwner && !isSelf)
+            ? `<button type="button" class="match-menu-item btn-transfer-owner" role="menuitem" data-member-id="${m.id}" data-member-name="${escapeHtml(m.nickname)}">${t('groupDetail.transferOwner')}</button>`
+            : '';
+
         const li = document.createElement('li');
         li.className = `member-item${isSelf ? ' me' : ''}${!hasRating ? ' unlinked' : ''}`;
         li.innerHTML = `
             <span class="member-name">${playerLink(m.id, m.nickname)}${badge}</span>
             <span class="member-rating">${hasRating ? `(${m.rating_rapid})` : `(${t('groupDetail.notLinked')})`}</span>
-            ${matchMenu([roleItem, kickItem])}
+            ${matchMenu([roleItem, transferItem, kickItem])}
         `;
         listEl.appendChild(li);
     });
@@ -361,6 +367,26 @@ function renderMembers(members) {
             kickMember(parseInt(btn.dataset.memberId), btn.dataset.memberName)
         );
     });
+
+    listEl.querySelectorAll('.btn-transfer-owner').forEach(btn => {
+        btn.addEventListener('click', () =>
+            transferOwner(parseInt(btn.dataset.memberId), btn.dataset.memberName)
+        );
+    });
+}
+
+async function transferOwner(memberId, memberName) {
+    if (!await showConfirm(t('groupDetail.confirmTransferOwner', { name: memberName }), { danger: true, okText: t('groupDetail.transferOwner') })) return;
+    const result = await apiFetch(`/api/groups/${groupId}/transfer-owner`, {
+        method: 'POST',
+        body: JSON.stringify({ member_id: memberId }),
+    });
+    if (result?.ok) {
+        await refreshPage();
+        showToast(t('groupDetail.ownerTransferred', { name: memberName }), 'info');
+    } else {
+        showToast(result?.data?.detail || t('groupDetail.errorOccurred'));
+    }
 }
 
 // 좁은 화면에서 멤버 목록 접기/펼치기 (기본 접힘, 선택은 기기에 기억). 넓은 화면에서는 버튼이 숨겨져 동작하지 않음
@@ -448,13 +474,23 @@ function renderLatestAnnouncement(ann) {
     document.getElementById('btn-view-all-announcements').addEventListener('click', openAnnouncementListModal);
 }
 
-document.getElementById('btn-write-announcement').addEventListener('click', () => {
-    document.getElementById('input-announcement-title').value = '';
-    document.getElementById('input-announcement-content').value = '';
+// 공지 작성/수정 겸용 창. ann을 넘기면 수정 모드 (제목·버튼 문구가 바뀌고 저장 시 PUT)
+let editingAnnouncementId = null;
+
+function openAnnouncementEditor(ann = null) {
+    editingAnnouncementId = ann ? ann.id : null;
+    document.getElementById('announcement-modal-title').textContent =
+        t(ann ? 'groupDetail.editAnnouncementTitle' : 'groupDetail.writeAnnouncementTitle');
+    document.getElementById('btn-confirm-create-announcement').textContent =
+        t(ann ? 'common.save' : 'groupDetail.register');
+    document.getElementById('input-announcement-title').value   = ann ? ann.title : '';
+    document.getElementById('input-announcement-content').value = ann ? ann.content : '';
     document.getElementById('create-announcement-error').textContent = '';
     document.getElementById('modal-create-announcement').classList.remove('hidden');
     setTimeout(() => document.getElementById('input-announcement-title').focus(), 50);
-});
+}
+
+document.getElementById('btn-write-announcement').addEventListener('click', () => openAnnouncementEditor());
 
 document.getElementById('btn-confirm-create-announcement').addEventListener('click', async () => {
     const title   = document.getElementById('input-announcement-title').value.trim();
@@ -471,24 +507,29 @@ document.getElementById('btn-confirm-create-announcement').addEventListener('cli
         return;
     }
 
-    const btn = document.getElementById('btn-confirm-create-announcement');
+    const btn       = document.getElementById('btn-confirm-create-announcement');
+    const editingId = editingAnnouncementId;
     btn.disabled = true;
     btn.textContent = t('groupDetail.registering');
 
     try {
-        const result = await apiFetch(`/api/groups/${groupId}/announcements`, {
-            method: 'POST',
-            body: JSON.stringify({ title, content }),
-        });
+        const result = editingId
+            ? await apiFetch(`/api/announcements/${editingId}`, { method: 'PUT', body: JSON.stringify({ title, content }) })
+            : await apiFetch(`/api/groups/${groupId}/announcements`, { method: 'POST', body: JSON.stringify({ title, content }) });
         if (result?.ok) {
             document.getElementById('modal-create-announcement').classList.add('hidden');
+            if (editingId) {
+                const a = allAnnouncements.find(x => x.id === editingId);
+                if (a) { a.title = result.data.title; a.content = result.data.content; }
+                renderAnnouncementList();
+            }
             await loadLatestAnnouncement();
         } else {
-            errorEl.textContent = result?.data?.detail || t('groupDetail.registerFailed');
+            errorEl.textContent = result?.data?.detail || t(editingId ? 'groupDetail.saveFailed' : 'groupDetail.registerFailed');
         }
     } finally {
         btn.disabled = false;
-        btn.textContent = t('groupDetail.register');
+        btn.textContent = t(editingId ? 'common.save' : 'groupDetail.register');
     }
 });
 
@@ -524,7 +565,8 @@ function renderAnnouncementList() {
             <div class="announcement-item-head">
                 <h4 class="announcement-item-title">${escapeHtml(a.title)}</h4>
                 <span class="announcement-item-date">${formatDate(a.created_at)}</span>
-                ${isAdmin() ? `<button class="btn-delete-announcement" data-id="${a.id}">${t('common.delete')}</button>` : ''}
+                ${isAdmin() ? `<button class="btn-edit-announcement" data-id="${a.id}">${t('common.edit')}</button>
+                <button class="btn-delete-announcement" data-id="${a.id}">${t('common.delete')}</button>` : ''}
             </div>
             <p class="announcement-item-content">${escapeHtml(a.content)}</p>
             <p class="announcement-item-author">${t('groupDetail.authorLabel')} ${escapeHtml(a.author_nickname)}</p>
@@ -533,6 +575,9 @@ function renderAnnouncementList() {
 
     el.querySelectorAll('.btn-delete-announcement').forEach(btn => {
         btn.addEventListener('click', () => deleteAnnouncement(parseInt(btn.dataset.id)));
+    });
+    el.querySelectorAll('.btn-edit-announcement').forEach(btn => {
+        btn.addEventListener('click', () => openAnnouncementEditor(allAnnouncements.find(a => a.id === parseInt(btn.dataset.id))));
     });
 }
 
@@ -553,16 +598,80 @@ async function deleteAnnouncement(announcementId) {
 
 document.getElementById('btn-group-settings').addEventListener('click', openGroupSettings);
 
+function renderGroupHeader() {
+    document.title = `${currentGroup.name} - ${t('common.appName')}`;
+    document.getElementById('group-name').textContent  = currentGroup.name;
+    document.getElementById('invite-code').textContent = currentGroup.invite_code;
+}
+
 async function openGroupSettings() {
     const result = await apiFetch(`/api/groups/${groupId}/settings`);
     if (result?.ok) {
         cachedSettings = { ...cachedSettings, ...result.data };
         document.getElementById('gs-input-color-auto').checked = cachedSettings.is_color_automatic !== false;
     }
+    document.getElementById('gs-input-name').value = currentGroup?.name || '';
+    document.getElementById('gs-invite-code').textContent = currentGroup?.invite_code || '-';
+    document.getElementById('gs-info-msg').textContent = '';
     document.getElementById('gs-danger-zone').classList.toggle('hidden', currentRole !== '방장');
     document.getElementById('gs-msg').textContent = '';
     document.getElementById('modal-group-settings').classList.remove('hidden');
 }
+
+function setGroupInfoMsg(text, isError = false) {
+    const el = document.getElementById('gs-info-msg');
+    el.className   = 'settings-msg' + (isError ? ' error' : '');
+    el.textContent = text;
+    if (!isError && text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 2000);
+}
+
+document.getElementById('btn-save-group-name').addEventListener('click', async () => {
+    const name = document.getElementById('gs-input-name').value.trim();
+    const btn  = document.getElementById('btn-save-group-name');
+    btn.disabled = true;
+    try {
+        const result = await apiFetch(`/api/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+        if (result?.ok) {
+            currentGroup.name = result.data.name;
+            document.getElementById('gs-input-name').value = currentGroup.name;
+            renderGroupHeader();
+            setGroupInfoMsg(t('groupDetail.groupRenamed'));
+        } else {
+            setGroupInfoMsg(result?.data?.detail || t('groupDetail.saveFailed'), true);
+        }
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById('gs-input-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btn-save-group-name').click();
+});
+
+document.getElementById('btn-regenerate-invite').addEventListener('click', async () => {
+    if (!await showConfirm(t('groupDetail.confirmRegenerateInvite'), { danger: true, okText: t('groupDetail.regenerateInvite') })) return;
+    const result = await apiFetch(`/api/groups/${groupId}/invite-code`, { method: 'POST' });
+    if (result?.ok) {
+        currentGroup.invite_code = result.data.invite_code;
+        document.getElementById('gs-invite-code').textContent = currentGroup.invite_code;
+        renderGroupHeader();
+        setGroupInfoMsg(t('groupDetail.inviteRegenerated'));
+    } else {
+        setGroupInfoMsg(result?.data?.detail || t('groupDetail.errorOccurred'), true);
+    }
+});
+
+// ===== 그룹 나가기 (방장 제외) =====
+
+document.getElementById('btn-leave-group').addEventListener('click', async () => {
+    if (!await showConfirm(t('groupDetail.confirmLeaveGroup', { name: currentGroup?.name || '' }), { danger: true, okText: t('groupDetail.leaveGroup') })) return;
+    const result = await apiFetch(`/api/groups/${groupId}/leave`, { method: 'POST' });
+    if (result?.ok) {
+        window.location.href = '../lobby/lobby.html';
+    } else {
+        showToast(result?.data?.detail || t('groupDetail.errorOccurred'));
+    }
+});
 
 document.getElementById('gs-input-color-auto').addEventListener('change', async (e) => {
     const isColorAuto = e.target.checked;
@@ -1285,19 +1394,44 @@ function renderPollMatches(pollId) {
 
 // ===== 최근 경기 내역 (공식 + 친선) =====
 
+// 지금까지 불러온 최근 경기 (더보기로 뒤에 이어 붙임)
+const RECENT_PAGE_SIZE = 30;
+let recentMatches  = [];
+let recentHasMore  = false;
+
+function setRecentMatches(page, append = false) {
+    recentMatches = append ? recentMatches.concat(page) : page;
+    recentHasMore = page.length === RECENT_PAGE_SIZE;
+    renderRecentMatches();
+}
+
 async function loadRecentMatches() {
     const el = document.getElementById('recent-matches');
     el.innerHTML = skeletonHtml(4);
 
-    const result = await apiFetch(`/api/groups/${groupId}/matches`);
+    const result = await apiFetch(`/api/groups/${groupId}/matches?limit=${RECENT_PAGE_SIZE}`);
     if (!result?.ok) {
         el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
         return;
     }
-    renderRecentMatches(result.data);
+    setRecentMatches(result.data);
 }
 
-function renderRecentMatches(matches) {
+async function loadMoreRecentMatches(btn) {
+    btn.disabled = true;
+    btn.textContent = t('common.loading');
+    const result = await apiFetch(`/api/groups/${groupId}/matches?limit=${RECENT_PAGE_SIZE}&offset=${recentMatches.length}`);
+    if (result?.ok) {
+        setRecentMatches(result.data, true);
+    } else {
+        btn.disabled = false;
+        btn.textContent = t('groupDetail.loadMore');
+        showToast(result?.data?.detail || t('groupDetail.loadFailed'));
+    }
+}
+
+function renderRecentMatches() {
+    const matches = recentMatches;
     const el = document.getElementById('recent-matches');
 
     if (!matches.length) {
@@ -1337,7 +1471,11 @@ function renderRecentMatches(matches) {
                 </div>
                 ${noteHtml}
             </div>`;
-    }).join('');
+    }).join('') + (recentHasMore
+        ? `<button type="button" class="btn-load-more" id="btn-more-recent">${t('groupDetail.loadMore')}</button>`
+        : '');
+
+    document.getElementById('btn-more-recent')?.addEventListener('click', (e) => loadMoreRecentMatches(e.currentTarget));
 
     el.querySelectorAll('.btn-pgn-edit').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -2258,7 +2396,7 @@ async function refreshPage() {
         apiFetch(`/api/groups/${groupId}/history?page=1`),
         apiFetch('/api/me'),
         apiFetch(`/api/groups/${groupId}/announcements/latest`),
-        apiFetch(`/api/groups/${groupId}/matches`),
+        apiFetch(`/api/groups/${groupId}/matches?limit=${RECENT_PAGE_SIZE}`),
     ]);
     await window.i18nReady;
 
@@ -2280,9 +2418,8 @@ async function refreshPage() {
 
     const { group, members, stats, current_role } = membersRes.data;
 
-    document.title     = `${group.name} - ${t('common.appName')}`;
-    document.getElementById('group-name').textContent  = group.name;
-    document.getElementById('invite-code').textContent = group.invite_code;
+    currentGroup = group;
+    renderGroupHeader();
     document.getElementById('member-count').textContent = t('lobby.memberCountLabel', { count: stats.member_count });
 
     currentMembers = members;
@@ -2290,6 +2427,7 @@ async function refreshPage() {
     if (meRes?.ok) currentUserId = meRes.data.id;
 
     document.getElementById('btn-group-settings').classList.toggle('hidden', currentRole === '회원');
+    document.getElementById('btn-leave-group').classList.toggle('hidden', currentRole === '방장');
     document.getElementById('btn-write-announcement').classList.toggle('hidden', !isAdmin());
 
     renderMembers(members);
@@ -2302,7 +2440,7 @@ async function refreshPage() {
 
     renderLatestAnnouncement(annRes?.ok ? annRes.data : null);
     if (matchesRes?.ok) {
-        renderRecentMatches(matchesRes.data);
+        setRecentMatches(matchesRes.data);
     } else {
         document.getElementById('recent-matches').innerHTML =
             `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
@@ -2331,7 +2469,11 @@ const ACTION_KEY_MAP = {
     '친선경기_폴더담기': 'folderAssign',
     '친선경기_폴더빼기': 'folderRemove',
     '멤버_강퇴':     'memberKick',
+    '멤버_탈퇴':     'memberLeave',
     '역할_변경':     'roleChange',
+    '방장_위임':     'ownerTransfer',
+    '그룹_이름변경': 'groupRename',
+    '초대코드_재발급': 'inviteRegen',
 };
 
 const ACTION_COLORS = {
@@ -2351,17 +2493,35 @@ const ACTION_COLORS = {
     '친선경기_폴더담기': '#6fcf97',
     '친선경기_폴더빼기': '#9b9b9b',
     '멤버_강퇴':     '#e07070',
+    '멤버_탈퇴':     '#9b9b9b',
     '역할_변경':     '#9b7ed4',
+    '방장_위임':     '#9b7ed4',
+    '그룹_이름변경': '#7b9ed4',
+    '초대코드_재발급': '#f0a04b',
 };
 
-async function loadActivityLogs() {
+const ACTIVITY_PAGE_SIZE = 50;
+let activityLogs = [];
+
+// append=true면 지금까지 불러온 기록 뒤에 다음 페이지를 이어 붙인다 (선택된 필터 기준)
+async function loadActivityLogs(append = false) {
+    const el     = document.getElementById('activity-log-list');
     const filter = document.getElementById('activity-log-filter')?.value || '';
-    const url = `/api/groups/${groupId}/activity-logs${filter ? `?action=${encodeURIComponent(filter)}` : ''}`;
-    const result = await apiFetch(url);
-    if (result?.ok) renderActivityLogs(result.data);
+    const params = new URLSearchParams({ limit: ACTIVITY_PAGE_SIZE, offset: append ? activityLogs.length : 0 });
+    if (filter) params.set('action', filter);
+    if (!append) el.innerHTML = skeletonHtml(5);
+
+    const result = await apiFetch(`/api/groups/${groupId}/activity-logs?${params}`);
+    if (!result?.ok) {
+        if (append) showToast(result?.data?.detail || t('groupDetail.loadFailed'));
+        else el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.loadFailed')}</p>`;
+        return;
+    }
+    activityLogs = append ? activityLogs.concat(result.data) : result.data;
+    renderActivityLogs(activityLogs, result.data.length === ACTIVITY_PAGE_SIZE);
 }
 
-function renderActivityLogs(logs) {
+function renderActivityLogs(logs, hasMore = false) {
     const el = document.getElementById('activity-log-list');
     if (!logs.length) {
         el.innerHTML = `<p class="empty-msg-sm">${t('groupDetail.noActivityLogs')}</p>`;
@@ -2380,10 +2540,18 @@ function renderActivityLogs(logs) {
                 </div>
                 <span class="activity-time">${time}</span>
             </div>`;
-    }).join('');
+    }).join('') + (hasMore
+        ? `<button type="button" class="btn-load-more" id="btn-more-activity">${t('groupDetail.loadMore')}</button>`
+        : '');
+
+    document.getElementById('btn-more-activity')?.addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        e.currentTarget.textContent = t('common.loading');
+        loadActivityLogs(true);
+    });
 }
 
-document.getElementById('activity-log-filter').addEventListener('change', loadActivityLogs);
+document.getElementById('activity-log-filter').addEventListener('change', () => loadActivityLogs());
 
 document.getElementById('btn-open-activity-log').addEventListener('click', async () => {
     document.getElementById('modal-activity-log').classList.remove('hidden');

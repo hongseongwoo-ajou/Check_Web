@@ -48,6 +48,7 @@
                         </div>
                         <button id="btn-group-settings" class="btn-group-settings hidden" data-i18n="groupDetail.groupSettings">그룹 설정</button>
                         <button id="btn-leaderboard" class="btn-leaderboard" data-i18n="groupDetail.viewLeaderboard">순위표 보기</button>
+                        <button id="btn-leave-group" class="btn-leave-group hidden" data-i18n="groupDetail.leaveGroup">그룹 나가기</button>
                     </div>
                 </div>
 
@@ -150,7 +151,11 @@
                         <option value="친선경기_폴더담기" data-i18n="groupDetail.action.folderAssign">친선 경기 폴더 담기</option>
                         <option value="친선경기_폴더빼기" data-i18n="groupDetail.action.folderRemove">친선 경기 폴더 빼기</option>
                         <option value="멤버_강퇴" data-i18n="groupDetail.action.memberKick">멤버 강퇴</option>
+                        <option value="멤버_탈퇴" data-i18n="groupDetail.action.memberLeave">멤버 탈퇴</option>
                         <option value="역할_변경" data-i18n="groupDetail.action.roleChange">역할 변경</option>
+                        <option value="방장_위임" data-i18n="groupDetail.action.ownerTransfer">방장 위임</option>
+                        <option value="그룹_이름변경" data-i18n="groupDetail.action.groupRename">그룹 이름 변경</option>
+                        <option value="초대코드_재발급" data-i18n="groupDetail.action.inviteRegen">초대 코드 재발급</option>
                     </select>
                     <button class="btn-cancel btn-modal-close" data-modal="modal-activity-log">&#10005;</button>
                 </div>
@@ -314,6 +319,22 @@
                 <button class="btn-modal-close btn-cancel" data-modal="modal-group-settings">&#10005;</button>
             </div>
 
+            <!-- 그룹 정보 (이름 변경, 초대 코드 재발급) -->
+            <div class="gs-section">
+                <h4 class="gs-section-title" data-i18n="groupDetail.groupInfoHeading">그룹 정보</h4>
+                <label class="gs-field-label" for="gs-input-name" data-i18n="lobby.groupNameLabel">그룹 이름</label>
+                <div class="gs-inline-row">
+                    <input type="text" id="gs-input-name" class="form-input" maxlength="50">
+                    <button id="btn-save-group-name" class="btn-gs-action" data-i18n="common.save">저장</button>
+                </div>
+                <label class="gs-field-label" data-i18n="lobby.inviteCodeLabel">초대 코드</label>
+                <div class="gs-inline-row">
+                    <code id="gs-invite-code" class="invite-code">-</code>
+                    <button id="btn-regenerate-invite" class="btn-gs-action" data-i18n="groupDetail.regenerateInvite">재발급</button>
+                </div>
+                <p id="gs-info-msg" class="settings-msg"></p>
+            </div>
+
             <!-- 대진 설정 -->
             <div class="gs-section">
                 <h4 class="gs-section-title" data-i18n="groupDetail.matchSettingsHeading">대진 설정</h4>
@@ -374,7 +395,7 @@
     <div id="modal-create-announcement" class="modal hidden" role="dialog" aria-modal="true">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3 class="modal-title" data-i18n="groupDetail.writeAnnouncementTitle">공지 작성</h3>
+            <h3 class="modal-title" id="announcement-modal-title" data-i18n="groupDetail.writeAnnouncementTitle">공지 작성</h3>
             <div class="form-group">
                 <label for="input-announcement-title" data-i18n="groupDetail.titleLabel">제목</label>
                 <input type="text" id="input-announcement-title" class="form-input"

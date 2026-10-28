@@ -249,7 +249,11 @@
       "folderAssign": "Added to Folder",
       "folderRemove": "Removed from Folder",
       "memberKick": "Member Kicked",
-      "roleChange": "Role Changed"
+      "roleChange": "Role Changed",
+      "memberLeave": "Member Left",
+      "ownerTransfer": "Ownership Transferred",
+      "groupRename": "Group Renamed",
+      "inviteRegen": "Invite Code Regenerated"
     },
     "addMatchButton": "+ Add Match",
     "addMatchTitle": "Add Match",
@@ -360,6 +364,18 @@
     "viewAll": "View All",
     "whiteShort": "W",
     "winParen": "{{name}} wins ({{color}})",
-    "winnerAnnounce": "{{name}} wins"
+    "winnerAnnounce": "{{name}} wins",
+    "leaveGroup": "Leave Group",
+    "confirmLeaveGroup": "Leave '{{name}}'? You'll need an invite code to rejoin.",
+    "loadMore": "Load more",
+    "editAnnouncementTitle": "Edit Announcement",
+    "transferOwner": "Transfer ownership",
+    "confirmTransferOwner": "Make {{name}} the owner? You'll become an officer, and only the new owner can transfer it back.",
+    "ownerTransferred": "{{name}} is now the owner.",
+    "groupInfoHeading": "Group Info",
+    "regenerateInvite": "Regenerate",
+    "confirmRegenerateInvite": "Issue a new invite code? The old code will stop working.",
+    "inviteRegenerated": "A new invite code has been issued.",
+    "groupRenamed": "Group name updated."
   }
 }

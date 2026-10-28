@@ -42,6 +42,9 @@ EN = {
     "자신의 역할은 변경할 수 없습니다.": "You cannot change your own role.",
     "해당 멤버를 찾을 수 없습니다.": "Member not found.",
     "역할은 '임원' 또는 '회원'만 설정할 수 있습니다.": "Role must be either officer or member.",
+    "방장은 그룹을 나갈 수 없습니다. 먼저 다른 멤버에게 방장을 넘겨주세요.": "The owner can't leave the group. Transfer ownership to another member first.",
+    "방장만 방장을 넘길 수 있습니다.": "Only the owner can transfer ownership.",
+    "자신에게는 방장을 넘길 수 없습니다.": "You can't transfer ownership to yourself.",
     "유효하지 않은 활동 유형입니다.": "Invalid activity type.",
     # 공지
     "공지사항을 찾을 수 없습니다.": "Announcement not found.",
